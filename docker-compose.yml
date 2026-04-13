@@ -1,0 +1,109 @@
+version: '3.9'
+
+# ─── Redes isoladas ──────────────────────────────────────────────────
+networks:
+  frontend_net:
+    driver: bridge
+  backend_net:
+    driver: bridge
+
+# ─── Volumes persistentes ────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  backend_logs:
+    driver: local
+
+services:
+
+  # ─── Banco de Dados ──────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: bolao_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bolao_megasena
+      POSTGRES_USER: bolao_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bolao_user -d bolao_megasena"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # Banco NÃO exposto externamente em produção
+    expose:
+      - "5432"
+
+  # ─── Backend ────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bolao_backend
+    restart: unless-stopped
+    # Roda migrate + seed antes de iniciar o servidor
+    command: >
+      sh -c "
+        npx prisma migrate deploy &&
+        node prisma/seed.js &&
+        node server.js
+      "
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://bolao_user:${POSTGRES_PASSWORD}@db:5432/bolao_megasena
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_EXPIRES_IN: 7d
+      JWT_REFRESH_EXPIRES_IN: 30d
+      BCRYPT_ROUNDS: 12
+      FRONTEND_URL: ${FRONTEND_URL}
+      BACKEND_URL: ${BACKEND_URL}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN}
+      MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET}
+      TICKET_PRICE_BRL: 30.00
+      ADMIN_WHATSAPP: ${ADMIN_WHATSAPP}
+      ADMIN_TOTP_ISSUER: BolaoMegaSena
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD}
+      LOG_LEVEL: info
+      LOG_DIR: /app/logs
+    volumes:
+      - backend_logs:/app/logs
+    networks:
+      - backend_net
+    expose:
+      - "3001"
+    healthcheck:
+      disable: true
+
+  # ─── Frontend ───────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+        VITE_ADMIN_WHATSAPP: ${ADMIN_WHATSAPP}
+        VITE_PIX_KEY: ${ADMIN_PIX_KEY}
+    container_name: bolao_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - frontend_net
+      - backend_net
+    ports:
+      - "80:80"
+      # Em produção com SSL, use 443 via reverse proxy (Traefik/Nginx externo)
+
+# ─── Compose override para desenvolvimento ─────────────────────────
+# Use: docker compose -f docker-compose.yml -f docker-compose.dev.yml up

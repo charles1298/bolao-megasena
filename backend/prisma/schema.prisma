@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  player
+  admin
+}
+
+enum GameStatus {
+  pending
+  active
+  finished
+}
+
+enum TicketStatus {
+  pending_payment
+  active
+  winner
+}
+
+enum PaymentStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+model User {
+  id           String   @id @default(uuid())
+  nickname     String   @unique
+  passwordHash String   @map("password_hash")
+  whatsapp     String?
+  role         UserRole @default(player)
+  totpSecret   String?  @map("totp_secret")
+  totpEnabled  Boolean  @default(false) @map("totp_enabled")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tickets       Ticket[]
+  refreshTokens RefreshToken[]
+  adminLogs     AdminLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Game {
+  id                 String     @id @default(uuid())
+  name               String     @default("Bolão Mega Sena")
+  startDate          DateTime   @map("start_date")
+  status             GameStatus @default(pending)
+  totalPot           Decimal    @default(0) @map("total_pot") @db.Decimal(12, 2)
+  accumulatedNumbers Int[]      @map("accumulated_numbers")
+  drawCount          Int        @default(0) @map("draw_count")
+  prizeProcessed     Boolean    @default(false) @map("prize_processed")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+
+  tickets Ticket[]
+  draws   Draw[]
+
+  @@map("games")
+}
+
+model Draw {
+  id        String   @id @default(uuid())
+  gameId    String   @map("game_id")
+  drawDate  DateTime @map("draw_date")
+  numbers   Int[]
+  drawOrder Int      @map("draw_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@map("draws")
+}
+
+model Ticket {
+  id             String       @id @default(uuid())
+  userId         String       @map("user_id")
+  gameId         String       @map("game_id")
+  numbers        Int[]
+  status         TicketStatus @default(pending_payment)
+  totalHits      Int          @default(0) @map("total_hits")
+  hitHistory     Json         @default("[]") @map("hit_history")
+  prizeAmount    Decimal?     @map("prize_amount") @db.Decimal(12, 2)
+  isPeQuente     Boolean      @default(false) @map("is_pe_quente")
+  isPeFrio       Boolean      @default(false) @map("is_pe_frio")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  user    User     @relation(fields: [userId], references: [id])
+  game    Game     @relation(fields: [gameId], references: [id])
+  payment Payment?
+
+  @@map("tickets")
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  ticketId        String        @unique @map("ticket_id")
+  mpPaymentId     String?       @unique @map("mp_payment_id")
+  amount          Decimal       @db.Decimal(12, 2)
+  status          PaymentStatus @default(pending)
+  qrCode          String?       @map("qr_code") @db.Text
+  qrCodeBase64    String?       @map("qr_code_base64") @db.Text
+  pixCode         String?       @map("pix_code") @db.Text
+  expiresAt       DateTime?     @map("expires_at")
+  paidAt          DateTime?     @map("paid_at")
+  receiptUrl      String?       @map("receipt_url")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model AdminLog {
+  id        String   @id @default(uuid())
+  adminId   String   @map("admin_id")
+  action    String
+  details   Json     @default("{}")
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@map("admin_logs")
+}
+
+model LoginAttempt {
+  id        String   @id @default(uuid())
+  ipAddress String   @map("ip_address")
+  nickname  String?
+  success   Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ipAddress, createdAt])
+  @@map("login_attempts")
+}

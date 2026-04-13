@@ -1,0 +1,31 @@
+version: '3.9'
+
+# Override para desenvolvimento local
+# Use: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  db:
+    ports:
+      - "5432:5432" # Expõe banco em dev para ferramentas como DBeaver
+
+  backend:
+    build:
+      target: builder
+    command: npm run dev
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    ports:
+      - "3001:3001"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
