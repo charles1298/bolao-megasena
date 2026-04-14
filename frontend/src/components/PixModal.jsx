@@ -14,7 +14,9 @@ export default function PixModal({ manual, paymentId, pixCode, qrCodeBase64, exp
 
 // ─── Modal pagamento manual (sem Mercado Pago) ──────────────────────────────
 function ManualPixModal({ amount, ticketIds, onClose }) {
-  const [copied, setCopied] = useState(false);
+  const [copied,   setCopied]   = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [approved, setApproved] = useState(false);
 
   const qty = ticketIds?.length || 1;
   const whatsappMsg = encodeURIComponent(
@@ -34,6 +36,68 @@ function ManualPixModal({ amount, ticketIds, onClose }) {
     }
   }
 
+  // Verifica se algum dos tickets pendentes foi aprovado pelo admin
+  async function checkApproval() {
+    if (!ticketIds?.length || checking) return;
+    setChecking(true);
+    try {
+      const { data } = await api.get('/game/tickets/my');
+      const myIds = new Set(ticketIds.map(String));
+      const anyActive = data.some(
+        (t) => myIds.has(String(t.id)) && t.status === 'active'
+      );
+      if (anyActive) {
+        setApproved(true);
+        toast.success('🎉 Pagamento confirmado! Suas cartelas estão ativas!', { duration: 6000 });
+      } else {
+        toast('Pagamento ainda não confirmado. Aguarde o admin aprovar.', { icon: '⏳' });
+      }
+    } catch {
+      toast.error('Erro ao verificar. Tente novamente.');
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  // Polling automático a cada 30s
+  useEffect(() => {
+    if (!ticketIds?.length || approved) return;
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await api.get('/game/tickets/my');
+        const myIds = new Set(ticketIds.map(String));
+        const anyActive = data.some(
+          (t) => myIds.has(String(t.id)) && t.status === 'active'
+        );
+        if (anyActive) {
+          setApproved(true);
+          toast.success('🎉 Pagamento confirmado! Suas cartelas estão ativas!', { duration: 8000 });
+          clearInterval(interval);
+        }
+      } catch { /* silencia */ }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [ticketIds, approved]);
+
+  if (approved) {
+    return (
+      <div style={overlay}>
+        <div style={{ ...modal, textAlign: 'center' }}>
+          <div style={{ fontSize: '4rem', marginBottom: 16 }}>🎉</div>
+          <h3 style={{ color: 'var(--gold)', marginBottom: 8, fontFamily: "'Cormorant Garamond', serif", fontSize: '1.6rem' }}>
+            Pagamento Confirmado!
+          </h3>
+          <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>
+            Suas {qty} cartela{qty > 1 ? 's estão ativas' : ' está ativa'} e participando do bolão.
+          </p>
+          <button onClick={onClose} className="btn btn-primary btn-full" type="button">
+            Ver minhas cartelas
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={overlay} onClick={(e) => e.target === e.currentTarget && onClose?.()}>
       <div style={modal}>
@@ -45,22 +109,36 @@ function ManualPixModal({ amount, ticketIds, onClose }) {
         {/* Cartelas confirmadas */}
         <div style={{ background: 'rgba(38,168,106,.1)', border: '1px solid rgba(38,168,106,.3)', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
           <p style={{ color: '#26A86A', fontWeight: 600, margin: 0, fontSize: '0.9rem' }}>
-            ✅ {qty} cartela{qty > 1 ? 's' : ''} criada{qty > 1 ? 's' : ''}! Agora realize o pagamento.
+            ✅ {qty} cartela{qty > 1 ? 's' : ''} criada{qty > 1 ? 's' : ''}! Realize o pagamento abaixo.
           </p>
         </div>
 
         {/* Valor */}
         <p style={{ color: 'var(--text-muted)', textAlign: 'center', marginBottom: 4, fontSize: '0.85rem' }}>Valor a pagar</p>
-        <p style={{ fontSize: '2.2rem', fontWeight: 700, color: 'var(--gold)', textAlign: 'center', marginBottom: 24, fontFamily: "'Cormorant Garamond', serif" }}>
+        <p style={{ fontSize: '2.2rem', fontWeight: 700, color: 'var(--gold)', textAlign: 'center', marginBottom: 20, fontFamily: "'Cormorant Garamond', serif" }}>
           R$ {Number(amount).toFixed(2).replace('.', ',')}
         </p>
 
-        {/* Chave PIX */}
-        <div style={{ marginBottom: 20 }}>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 8 }}>
-            Chave PIX para transferência:
+        {/* QR Code estático */}
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1 }}>
+            Escaneie o QR Code com seu banco
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px' }}>
+          <div style={{ display: 'inline-block', background: '#fff', borderRadius: 14, padding: 10 }}>
+            <img
+              src="/pix-qrcode.png"
+              alt="QR Code PIX"
+              style={{ width: 200, height: 200, display: 'block' }}
+            />
+          </div>
+        </div>
+
+        {/* Chave PIX */}
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 8 }}>
+            Ou copie a chave PIX:
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px' }}>
             <span style={{ flex: 1, fontFamily: 'monospace', fontSize: '1rem', color: 'var(--text-primary)', letterSpacing: '0.04em' }}>
               {PIX_KEY}
             </span>
@@ -73,19 +151,30 @@ function ManualPixModal({ amount, ticketIds, onClose }) {
               {copied ? '✓ Copiado' : '📋 Copiar'}
             </button>
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 6 }}>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 5 }}>
             Tipo: Celular · Beneficiário: Bolão Mega Sena
           </p>
         </div>
 
         {/* Instrução */}
-        <div style={{ background: 'rgba(212,168,67,.07)', border: '1px solid rgba(212,168,67,.2)', borderRadius: 10, padding: '12px 16px', marginBottom: 20 }}>
+        <div style={{ background: 'rgba(212,168,67,.07)', border: '1px solid rgba(212,168,67,.2)', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.83rem', margin: 0, lineHeight: 1.6 }}>
-            1. Abra seu banco e faça um <strong>PIX</strong> para a chave acima.<br />
+            1. Escaneie o QR Code ou copie a chave PIX acima.<br />
             2. Após pagar, <strong>envie o comprovante</strong> pelo WhatsApp abaixo.<br />
-            3. Suas cartelas serão ativadas após a confirmação.
+            3. Suas cartelas serão ativadas automaticamente após confirmação.
           </p>
         </div>
+
+        {/* Verificar status */}
+        <button
+          className="btn btn-ghost btn-full"
+          onClick={checkApproval}
+          disabled={checking}
+          type="button"
+          style={{ marginBottom: 10, fontSize: '0.85rem' }}
+        >
+          {checking ? '⏳ Verificando...' : '🔄 Verificar se pagamento foi confirmado'}
+        </button>
 
         {/* Botão WhatsApp */}
         <a
