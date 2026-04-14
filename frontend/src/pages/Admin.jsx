@@ -426,30 +426,49 @@ function UsersTab() {
 function TransactionsTab() {
   const [data, setData] = useState(null);
   const [page, setPage] = useState(1);
+  const [approving, setApproving] = useState(null);
 
-  useEffect(() => {
+  function load() {
     api.get(`/admin/transactions?page=${page}&limit=20`)
       .then(({ data }) => setData(data))
       .catch(() => toast.error('Erro ao carregar transações.'));
-  }, [page]);
+  }
+
+  useEffect(() => { load(); }, [page]);
+
+  async function approve(paymentId) {
+    if (!window.confirm('Confirmar aprovação manual deste pagamento?')) return;
+    setApproving(paymentId);
+    try {
+      await api.post(`/admin/payments/${paymentId}/approve`);
+      toast.success('Pagamento aprovado e cartela ativada!');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao aprovar.');
+    } finally {
+      setApproving(null);
+    }
+  }
 
   if (!data) return <div className="loading-overlay"><div className="spinner" /></div>;
 
   return (
     <div className="card">
-      <h4 style={{ marginBottom: 16 }}>Transações ({data.total})</h4>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h4>Transações ({data.total})</h4>
+        <button className="btn btn-secondary btn-sm" onClick={load} type="button">🔄 Atualizar</button>
+      </div>
       <div className="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>ID MP</th><th>Usuário</th><th>Valor</th><th>Status</th><th>Data</th>
+              <th>Usuário</th><th>Valor</th><th>Status</th><th>Data</th><th>Ação</th>
             </tr>
           </thead>
           <tbody>
             {data.payments.map((p) => (
               <tr key={p.id}>
-                <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{p.mpPaymentId || '—'}</td>
-                <td>{p.ticket?.user?.nickname || '—'}</td>
+                <td style={{ fontWeight: 600 }}>{p.ticket?.user?.nickname || '—'}</td>
                 <td style={{ fontWeight: 600 }}>R$ {Number(p.amount).toFixed(2)}</td>
                 <td>
                   <span className={`badge ${p.status === 'approved' ? 'badge-success' : p.status === 'pending' ? 'badge-warning' : 'badge-error'}`}>
@@ -457,6 +476,19 @@ function TransactionsTab() {
                   </span>
                 </td>
                 <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{new Date(p.createdAt).toLocaleDateString('pt-BR')}</td>
+                <td>
+                  {p.status === 'pending' && (
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => approve(p.id)}
+                      disabled={approving === p.id}
+                      type="button"
+                      style={{ padding: '4px 12px', fontSize: '0.78rem' }}
+                    >
+                      {approving === p.id ? '...' : '✓ Aprovar'}
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

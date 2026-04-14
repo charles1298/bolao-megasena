@@ -463,6 +463,63 @@ async function syncOfficialResult(req, res) {
   }
 }
 
+/**
+ * POST /api/admin/payments/:id/approve
+ * Aprova manualmente um pagamento pendente e ativa a cartela.
+ */
+async function approvePayment(req, res) {
+  try {
+    const { id } = req.params;
+
+    const payment = await prisma.payment.findUnique({
+      where: { id },
+      include: {
+        ticket: { select: { id: true, gameId: true, userId: true, status: true } },
+      },
+    });
+
+    if (!payment) return res.status(404).json({ error: 'Pagamento não encontrado.' });
+    if (payment.status === 'approved') return res.status(400).json({ error: 'Pagamento já aprovado.' });
+
+    const updates = [
+      prisma.payment.update({
+        where: { id },
+        data: { status: 'approved', paidAt: new Date() },
+      }),
+    ];
+
+    if (payment.ticket.status === 'pending_payment') {
+      updates.push(
+        prisma.ticket.update({
+          where: { id: payment.ticket.id },
+          data: { status: 'active' },
+        })
+      );
+      updates.push(
+        prisma.game.update({
+          where: { id: payment.ticket.gameId },
+          data: { totalPot: { increment: Number(payment.amount) } },
+        })
+      );
+    }
+
+    await prisma.$transaction(updates);
+
+    await logAdminAction(req.user.id, 'PAYMENT_APPROVED_MANUAL', {
+      paymentId: id,
+      ticketId: payment.ticket.id,
+      amount: payment.amount,
+    }, req.ip);
+
+    logger.info('Pagamento aprovado manualmente', { paymentId: id, adminId: req.user.id });
+
+    res.json({ message: 'Pagamento aprovado e cartela ativada.' });
+  } catch (err) {
+    logger.safeError('Erro ao aprovar pagamento', err);
+    res.status(500).json({ error: 'Erro ao aprovar pagamento.' });
+  }
+}
+
 module.exports = {
   setupTotp,
   confirmTotp,
@@ -478,4 +535,5 @@ module.exports = {
   getDashboard,
   fetchOfficialResult,
   syncOfficialResult,
+  approvePayment,
 };

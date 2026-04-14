@@ -15,6 +15,7 @@ const {
   getDashboard,
   fetchOfficialResult,
   syncOfficialResult,
+  approvePayment,
 } = require('../controllers/adminController');
 const { authenticate } = require('../middlewares/auth');
 const { requireAdmin } = require('../middlewares/admin');
@@ -101,6 +102,14 @@ router.get(
   ],
   validate,
   listTransactions
+);
+
+// ─── Aprovação manual de pagamento ────────────────────────────
+router.post(
+  '/payments/:id/approve',
+  [param('id').isUUID()],
+  validate,
+  approvePayment
 );
 
 // ─── Exportações CSV ──────────────────────────────────────────
