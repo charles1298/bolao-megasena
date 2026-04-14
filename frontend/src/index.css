@@ -464,6 +464,29 @@ tr:hover td      { background: rgba(212,168,67,.03); }
   border: 1.5px solid rgba(255,255,255,.12);
 }
 
+/* ─── Grade de números ───────────────────────────────────────────── */
+.number-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 9px;
+}
+
+@media (max-width: 768px) {
+  .number-grid {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 7px;
+  }
+  .number-ball {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    font-size: 12px;
+  }
+  .number-ball-selected {
+    transform: scale(1.04);
+  }
+}
+
 .number-ball-default {
   background: rgba(255,255,255,.04);
   color: rgba(250,247,240,.6);

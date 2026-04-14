@@ -24,48 +24,50 @@ export default function NumberPicker({ selected, onChange, disabled = false, hit
   return (
     <div>
       {/* Contador + limpar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 13, color: 'rgba(250,247,240,.45)', letterSpacing: 1, textTransform: 'uppercase' }}>
-            Selecionados:
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontSize: 11, color: 'rgba(250,247,240,.45)', letterSpacing: 1, textTransform: 'uppercase' }}>
+            Selecionados
           </span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {selected.map((n) => (
-              <span
-                key={n}
-                style={{
-                  width: 36, height: 36, borderRadius: '50%',
-                  background: 'var(--gold)',
-                  color: 'var(--forest)',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: 700, fontSize: 13,
-                  boxShadow: '0 4px 12px rgba(212,168,67,.35)',
-                  animation: 'ballPop .2s ease',
-                }}
-              >
-                {String(n).padStart(2, '0')}
-              </span>
-            ))}
-            {Array.from({ length: REQUIRED - selected.length }).map((_, i) => (
-              <span
-                key={`empty-${i}`}
-                style={{
-                  width: 36, height: 36, borderRadius: '50%',
-                  border: '1.5px dashed rgba(255,255,255,.15)',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 18, color: 'rgba(255,255,255,.12)',
-                }}
-              >
-                ·
-              </span>
-            ))}
-          </div>
+          <span style={{ fontSize: 12, color: 'rgba(250,247,240,.35)' }}>
+            <span style={{ color: done ? 'var(--forest3)' : 'var(--gold2)', fontWeight: 700 }}>
+              {selected.length}
+            </span>/6
+          </span>
         </div>
-        <span style={{ fontSize: 12, color: 'rgba(250,247,240,.35)' }}>
-          <span style={{ color: done ? 'var(--forest3)' : 'var(--gold2)', fontWeight: 700 }}>
-            {selected.length}
-          </span>/6
-        </span>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {selected.map((n) => (
+            <span
+              key={n}
+              style={{
+                width: 34, height: 34, borderRadius: '50%',
+                background: 'var(--gold)',
+                color: 'var(--forest)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, fontSize: 12,
+                boxShadow: '0 4px 12px rgba(212,168,67,.35)',
+                animation: 'ballPop .2s ease',
+                flexShrink: 0,
+              }}
+            >
+              {String(n).padStart(2, '0')}
+            </span>
+          ))}
+          {Array.from({ length: REQUIRED - selected.length }).map((_, i) => (
+            <span
+              key={`empty-${i}`}
+              style={{
+                width: 34, height: 34, borderRadius: '50%',
+                border: '1.5px dashed rgba(255,255,255,.15)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 18, color: 'rgba(255,255,255,.12)',
+                flexShrink: 0,
+              }}
+            >
+              ·
+            </span>
+          ))}
+        </div>
       </div>
 
       {selected.length > 0 && !disabled && (
@@ -78,8 +80,8 @@ export default function NumberPicker({ selected, onChange, disabled = false, hit
         </button>
       )}
 
-      {/* Grade 10×6 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 9 }}>
+      {/* Grade 10×6 (desktop) / 6×10 (mobile) */}
+      <div className="number-grid">
         {Array.from({ length: TOTAL }, (_, i) => i + 1).map((num) => (
           <button
             key={num}

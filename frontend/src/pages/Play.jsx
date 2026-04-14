@@ -109,7 +109,7 @@ export default function Play() {
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
 
         {/* Seletor */}
-        <div style={{ flex: 1, minWidth: 300 }}>
+        <div style={{ flex: 1, minWidth: 0, width: '100%' }}>
           <div className="card">
             <h3 style={{ marginBottom: 6, fontFamily: "'Cormorant Garamond', serif", fontSize: 22 }}>
               Cartela {cart.length + 1}
@@ -131,7 +131,7 @@ export default function Play() {
         </div>
 
         {/* Carrinho */}
-        <div style={{ width: 290, flexShrink: 0 }}>
+        <div style={{ width: '100%', maxWidth: 420, flexShrink: 0 }}>
           <div className="card">
             <h3 style={{ marginBottom: 16, fontFamily: "'Cormorant Garamond', serif", fontSize: 22 }}>
               Suas <span style={{ color: 'var(--gold2)' }}>cartelas</span>
