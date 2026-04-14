@@ -47,15 +47,55 @@ export default function Home() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Busca resultado Mega Sena e atualiza a cada 5 minutos
+  // Busca resultado Mega Sena diretamente da Caixa (IP do browser, não da VPS)
   useEffect(() => {
-    function fetchMegaSena() {
-      setMsLoading(true);
-      api.get('/game/mega-sena/latest')
-        .then(({ data }) => setMegaSena(data))
-        .catch(() => setMegaSena(null))
-        .finally(() => setMsLoading(false));
+    function parseCaixaResult(data) {
+      if (!data || !data.listaDezenas) return null;
+      const numbers = data.listaDezenas.map((n) => parseInt(n, 10)).sort((a, b) => a - b);
+      const prizes = (data.listaRateioPremio || []).map((p) => ({
+        tier: p.descricaoFaixa,
+        winners: p.numeroDeGanhadores,
+        prize: Number(p.valorPremio || 0),
+      }));
+      return {
+        contestNumber: data.numero,
+        drawDateFormatted: data.dataApuracao,
+        numbers,
+        accumulated: !!data.acumulado,
+        nextPrizeEstimate: Number(data.valorEstimadoProximoConcurso || 0),
+        prizes,
+      };
     }
+
+    async function fetchMegaSena() {
+      setMsLoading(true);
+      try {
+        // Tenta buscar direto da Caixa (browser tem IP residencial, não bloqueado)
+        const res = await fetch(
+          'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/',
+          { headers: { Accept: 'application/json' } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setMegaSena(parseCaixaResult(data));
+        } else {
+          // Fallback: tenta pelo backend
+          const backendRes = await api.get('/game/mega-sena/latest');
+          setMegaSena(backendRes.data);
+        }
+      } catch {
+        // Fallback: tenta pelo backend
+        try {
+          const backendRes = await api.get('/game/mega-sena/latest');
+          setMegaSena(backendRes.data);
+        } catch {
+          setMegaSena(null);
+        }
+      } finally {
+        setMsLoading(false);
+      }
+    }
+
     fetchMegaSena();
     const interval = setInterval(fetchMegaSena, 5 * 60 * 1000);
     return () => clearInterval(interval);
