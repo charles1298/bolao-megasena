@@ -411,6 +411,9 @@ function ResultadoOficialTab({ gameId, onRefresh }) {
 function UsersTab() {
   const [data, setData] = useState(null);
   const [page, setPage] = useState(1);
+  const [resetTarget, setResetTarget] = useState(null); // { id, nickname }
+  const [newPass, setNewPass] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     api.get(`/admin/users?page=${page}&limit=20`)
@@ -418,34 +421,91 @@ function UsersTab() {
       .catch(() => toast.error('Erro ao carregar usuários.'));
   }, [page]);
 
+  async function handleReset(e) {
+    e.preventDefault();
+    setResetting(true);
+    try {
+      await api.post(`/admin/users/${resetTarget.id}/reset-password`, { newPassword: newPass });
+      toast.success(`Senha de ${resetTarget.nickname} redefinida!`);
+      setResetTarget(null);
+      setNewPass('');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao redefinir.');
+    } finally {
+      setResetting(false);
+    }
+  }
+
   if (!data) return <div className="loading-overlay"><div className="spinner" /></div>;
 
   return (
-    <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h4>Usuários ({data.total})</h4>
-      </div>
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Apelido</th><th>WhatsApp</th><th>Cartelas</th><th>Cadastro</th><th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.users.map((u) => (
-              <tr key={u.id}>
-                <td style={{ fontWeight: 600 }}>{u.nickname}</td>
-                <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{u.whatsapp || '—'}</td>
-                <td>{u._count.tickets}</td>
-                <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{new Date(u.createdAt).toLocaleDateString('pt-BR')}</td>
-                <td><span className={`badge ${u.isActive ? 'badge-success' : 'badge-error'}`}>{u.isActive ? 'Ativo' : 'Bloqueado'}</span></td>
+    <div>
+      <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h4>Usuários ({data.total})</h4>
+        </div>
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Apelido</th><th>WhatsApp</th><th>Cartelas</th><th>Cadastro</th><th>Status</th><th>Ação</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.users.map((u) => (
+                <tr key={u.id}>
+                  <td style={{ fontWeight: 600 }}>{u.nickname}</td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{u.whatsapp || '—'}</td>
+                  <td>{u._count.tickets}</td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{new Date(u.createdAt).toLocaleDateString('pt-BR')}</td>
+                  <td><span className={`badge ${u.isActive ? 'badge-success' : 'badge-error'}`}>{u.isActive ? 'Ativo' : 'Bloqueado'}</span></td>
+                  <td>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                      onClick={() => { setResetTarget(u); setNewPass(''); }}
+                      type="button"
+                    >
+                      🔑 Senha
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <Pagination page={page} pages={data.pages} onPage={setPage} />
       </div>
-      <Pagination page={page} pages={data.pages} onPage={setPage} />
+
+      {/* Modal reset senha */}
+      {resetTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          <div className="card" style={{ maxWidth: 360, width: '100%' }}>
+            <h4 style={{ marginBottom: 8 }}>Redefinir senha</h4>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: 20 }}>
+              Usuário: <strong style={{ color: 'var(--gold2)' }}>{resetTarget.nickname}</strong>
+            </p>
+            <form onSubmit={handleReset}>
+              <div className="input-group">
+                <label>Nova senha (mín. 6 caracteres)</label>
+                <input
+                  className="input" type="text" value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  placeholder="Nova senha" required minLength={6} autoFocus
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="submit" className="btn btn-primary" disabled={resetting}>
+                  {resetting ? 'Salvando...' : 'Redefinir'}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => setResetTarget(null)}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

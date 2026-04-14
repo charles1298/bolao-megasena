@@ -71,7 +71,8 @@ export default function Play() {
     );
   }
 
-  const total = cart.length * 30;
+  const ticketPrice = game.ticketPrice ?? 30;
+  const total = cart.length * ticketPrice;
 
   return (
     <div className="container" style={{ padding: '2.5rem 24px 4rem' }}>
@@ -82,7 +83,7 @@ export default function Play() {
           <h2 className="section-title" style={{ marginBottom: 4 }}>
             Escolha seus <span>números</span>
           </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{game.name} — R$ 30,00 por cartela</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{game.name} — R$ {ticketPrice.toFixed(2).replace('.', ',')} por cartela</p>
         </div>
 
         {game.accumulatedNumbers?.length > 0 && (

@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import Play from './pages/Play';
 import Admin from './pages/Admin';
 import Ranking from './pages/Ranking';
+import Profile from './pages/Profile';
 
 function App() {
   const { loading } = useAuth();
@@ -60,6 +61,14 @@ function App() {
             />
 
             <Route path="/ranking" element={<Ranking />} />
+            <Route
+              path="/perfil"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

@@ -45,6 +45,7 @@ async function getCurrentGame(req, res) {
       drawCount: game.drawCount,
       activeTickets: game._count.tickets,
       draws: game.draws,
+      ticketPrice: parseFloat(process.env.TICKET_PRICE_BRL || '30.00'),
       prizeDistribution: {
         sixHits: '65%',
         peQuente: '10%',

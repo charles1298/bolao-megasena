@@ -9,9 +9,10 @@ export default function Login() {
   const location  = useLocation();
   const from      = location.state?.from?.pathname || '/painel';
 
-  const [form,        setForm]        = useState({ nickname: '', password: '', totpToken: '' });
-  const [requires2FA, setRequires2FA] = useState(false);
-  const [loading,     setLoading]     = useState(false);
+  const [form,          setForm]          = useState({ nickname: '', password: '', totpToken: '' });
+  const [requires2FA,   setRequires2FA]   = useState(false);
+  const [loading,       setLoading]       = useState(false);
+  const [keepConnected, setKeepConnected] = useState(true);
 
   const sessionExpired = new URLSearchParams(location.search).get('session') === 'expired';
 
@@ -27,6 +28,7 @@ export default function Login() {
         form.nickname.trim(),
         form.password,
         requires2FA ? form.totpToken : undefined,
+        keepConnected,
       );
       if (result.requires2FA) {
         setRequires2FA(true);
@@ -120,7 +122,17 @@ export default function Login() {
             </div>
           )}
 
-          <button type="submit" className="btn btn-primary btn-full" disabled={loading} style={{ marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 16, userSelect: 'none' }}>
+            <input
+              type="checkbox"
+              checked={keepConnected}
+              onChange={(e) => setKeepConnected(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: 'var(--gold)', cursor: 'pointer' }}
+            />
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Manter conectado</span>
+          </label>
+
+          <button type="submit" className="btn btn-primary btn-full" disabled={loading} style={{ marginTop: 0 }}>
             {loading
               ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Entrando...</>
               : 'Entrar'}

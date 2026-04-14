@@ -145,7 +145,7 @@ export default function Home() {
               Sorteios: <strong>Ter · Qui · Sáb</strong>
             </div>
             <div className="info-pill">
-              Cartela: <strong>R$ 30,00</strong>
+              Cartela: <strong>R$ {game ? Number(game.ticketPrice ?? 30).toFixed(2).replace('.', ',') : '30,00'}</strong>
             </div>
             {game && (
               <>
@@ -185,7 +185,7 @@ export default function Home() {
           ) : (
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Link to="/cadastro" className="btn btn-primary" style={{ fontSize: 16, padding: '18px 36px' }}>
-                Começar Agora — R$ 30/cartela
+                Começar Agora — R$ {game ? Number(game.ticketPrice ?? 30).toFixed(2).replace('.', ',') : '30,00'}/cartela
               </Link>
               <Link to="/login" className="btn btn-ghost">
                 Já tenho conta
@@ -315,7 +315,7 @@ export default function Home() {
 
       {/* ── Botão final ── */}
       <Link to={isAuthenticated ? '/jogar' : '/cadastro'} className="btn btn-primary btn-full" style={{ fontSize: 16, padding: 18 }}>
-        Comprar Cartelas — R$ 30,00 cada
+        Comprar Cartelas — R$ {game ? Number(game.ticketPrice ?? 30).toFixed(2).replace('.', ',') : '30,00'} cada
       </Link>
     </div>
   );

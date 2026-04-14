@@ -16,6 +16,7 @@ const {
   fetchOfficialResult,
   syncOfficialResult,
   approvePayment,
+  resetUserPassword,
 } = require('../controllers/adminController');
 const { authenticate } = require('../middlewares/auth');
 const { requireAdmin } = require('../middlewares/admin');
@@ -102,6 +103,14 @@ router.get(
   ],
   validate,
   listTransactions
+);
+
+// ─── Reset de senha de usuário (pelo admin) ───────────────────
+router.post(
+  '/users/:id/reset-password',
+  [param('id').isUUID(), body('newPassword').isLength({ min: 6 })],
+  validate,
+  resetUserPassword
 );
 
 // ─── Aprovação manual de pagamento ────────────────────────────

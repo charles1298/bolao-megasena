@@ -100,4 +100,29 @@ async function getMyStats(req, res) {
   }
 }
 
-module.exports = { getProfile, updateProfile, getMyStats };
+/**
+ * PUT /api/users/me/password
+ * Troca a senha do usuário autenticado.
+ */
+async function changePassword(req, res) {
+  const bcrypt = require('bcryptjs');
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) return res.status(401).json({ error: 'Senha atual incorreta.' });
+
+    const rounds = parseInt(process.env.BCRYPT_ROUNDS || '12');
+    const hash = await bcrypt.hash(newPassword, rounds);
+    await prisma.user.update({ where: { id: req.user.id }, data: { passwordHash: hash } });
+
+    logger.info('Senha alterada', { userId: req.user.id });
+    res.json({ message: 'Senha alterada com sucesso.' });
+  } catch (err) {
+    logger.safeError('Erro ao trocar senha', err);
+    res.status(500).json({ error: 'Erro ao trocar senha.' });
+  }
+}
+
+module.exports = { getProfile, updateProfile, getMyStats, changePassword };

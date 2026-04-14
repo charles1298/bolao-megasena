@@ -464,6 +464,37 @@ async function syncOfficialResult(req, res) {
 }
 
 /**
+ * POST /api/admin/users/:id/reset-password
+ * Admin redefine a senha de um usuário (sem precisar da senha atual).
+ */
+async function resetUserPassword(req, res) {
+  const bcrypt = require('bcryptjs');
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(422).json({ error: 'Nova senha deve ter ao menos 6 caracteres.' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+
+    const rounds = parseInt(process.env.BCRYPT_ROUNDS || '12');
+    const hash = await bcrypt.hash(newPassword, rounds);
+    await prisma.user.update({ where: { id }, data: { passwordHash: hash } });
+
+    await logAdminAction(req.user.id, 'USER_PASSWORD_RESET', { targetUserId: id, nickname: user.nickname }, req.ip);
+    logger.info('Senha redefinida pelo admin', { targetUserId: id, adminId: req.user.id });
+
+    res.json({ message: `Senha de ${user.nickname} redefinida com sucesso.` });
+  } catch (err) {
+    logger.safeError('Erro ao redefinir senha', err);
+    res.status(500).json({ error: 'Erro ao redefinir senha.' });
+  }
+}
+
+/**
  * POST /api/admin/payments/:id/approve
  * Aprova manualmente um pagamento pendente e ativa a cartela.
  */
@@ -536,4 +567,5 @@ module.exports = {
   fetchOfficialResult,
   syncOfficialResult,
   approvePayment,
+  resetUserPassword,
 };
