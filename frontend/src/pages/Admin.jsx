@@ -51,7 +51,7 @@ export default function Admin() {
 
       <div style={{ marginTop: 24 }}>
         {tab === 'Dashboard'         && <DashboardTab data={dashboard} onRefresh={loadDashboard} />}
-        {tab === 'Jogo'              && <GameTab gameId={dashboard?.activeGame?.id} />}
+        {tab === 'Jogo'              && <GameTab gameId={dashboard?.activeGame?.id} gameStatus={dashboard?.activeGame?.status} onRefresh={loadDashboard} />}
         {tab === 'Resultado Oficial' && <ResultadoOficialTab gameId={dashboard?.activeGame?.id} onRefresh={loadDashboard} />}
         {tab === 'Usuários'          && <UsersTab />}
         {tab === 'Transações'        && <TransactionsTab />}
@@ -94,10 +94,25 @@ function DashboardTab({ data, onRefresh }) {
 }
 
 // ─── Game Tab ──────────────────────────────────────────────────────
-function GameTab({ gameId }) {
+function GameTab({ gameId, gameStatus, onRefresh }) {
   const [form, setForm] = useState({ name: '', startDate: '' });
   const [draw, setDraw] = useState({ numbers: '', drawDate: new Date().toISOString().slice(0, 10) });
   const [loading, setLoading] = useState(false);
+
+  async function activateGame() {
+    if (!gameId) return toast.error('Nenhum jogo encontrado.');
+    if (!window.confirm('Ativar este jogo?')) return;
+    setLoading(true);
+    try {
+      await api.patch(`/admin/games/${gameId}/activate`);
+      toast.success('Jogo ativado com sucesso!');
+      onRefresh?.();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao ativar jogo.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function createGame(e) {
     e.preventDefault();
@@ -152,6 +167,19 @@ function GameTab({ gameId }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Ativar jogo pendente */}
+      {gameId && gameStatus === 'pending' && (
+        <div className="card" style={{ borderColor: 'var(--warning)', background: 'rgba(255,193,7,.05)' }}>
+          <h4 style={{ marginBottom: 8, color: 'var(--warning)' }}>Jogo pendente — aguardando ativação</h4>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: 16 }}>
+            O jogo existe mas ainda está pendente. Clique para ativá-lo e liberar apostas.
+          </p>
+          <button type="button" className="btn btn-primary" onClick={activateGame} disabled={loading}>
+            ▶ Ativar jogo agora
+          </button>
+        </div>
+      )}
+
       {/* Criar jogo */}
       <div className="card">
         <h4 style={{ marginBottom: 16 }}>Criar novo jogo</h4>
