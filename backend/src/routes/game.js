@@ -6,6 +6,7 @@ const {
   getMyTickets,
   getTicketById,
   getRanking,
+  getLatestMegaSena,
 } = require('../controllers/gameController');
 const { authenticate } = require('../middlewares/auth');
 const { validate } = require('../middlewares/validate');
@@ -15,6 +16,9 @@ router.get('/current', getCurrentGame);
 
 // GET /api/game/ranking — público
 router.get('/ranking', getRanking);
+
+// GET /api/game/mega-sena/latest — público
+router.get('/mega-sena/latest', getLatestMegaSena);
 
 // POST /api/game/tickets — autenticado
 router.post(

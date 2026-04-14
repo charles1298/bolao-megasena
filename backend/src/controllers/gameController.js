@@ -1,6 +1,7 @@
 const { prisma } = require('../services/prismaClient');
 const { validateNumbers, getActiveGame } = require('../services/gameService');
 const { createPixPayment } = require('../services/mercadoPagoService');
+const megaSenaService = require('../services/megaSenaService');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../utils/logger');
 
@@ -281,4 +282,18 @@ async function getRanking(req, res) {
   }
 }
 
-module.exports = { getCurrentGame, createTickets, getMyTickets, getTicketById, getRanking };
+/**
+ * GET /api/game/mega-sena/latest
+ * Endpoint público — retorna o último resultado da Mega Sena da Caixa.
+ */
+async function getLatestMegaSena(req, res) {
+  try {
+    const result = await megaSenaService.fetchLatestResult();
+    res.json(result);
+  } catch (err) {
+    logger.safeError('Erro ao buscar resultado Mega Sena (público)', err);
+    res.status(503).json({ error: 'Não foi possível obter o resultado da Mega Sena agora. Tente novamente em breve.' });
+  }
+}
+
+module.exports = { getCurrentGame, createTickets, getMyTickets, getTicketById, getRanking, getLatestMegaSena };

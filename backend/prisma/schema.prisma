@@ -40,6 +40,7 @@ model User {
   totpSecret   String?  @map("totp_secret")
   totpEnabled  Boolean  @default(false) @map("totp_enabled")
   isActive     Boolean  @default(true) @map("is_active")
+  balance      Decimal  @default(0) @map("balance") @db.Decimal(12, 2)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

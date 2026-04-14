@@ -67,9 +67,10 @@ function DashboardTab({ data, onRefresh }) {
   if (!data) return null;
   return (
     <div>
-      <div className="grid-4" style={{ marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         <StatCard label="Apostadores" value={data.totalUsers} />
         <StatCard label="Receita total" value={`R$ ${Number(data.totalRevenue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} color="var(--gold)" />
+        <StatCard label="Saldo da casa (20%)" value={`R$ ${Number(data.houseCut ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} color="var(--forest3)" />
         <StatCard label="Pagamentos pendentes" value={data.pendingPayments} color={data.pendingPayments > 0 ? 'var(--warning)' : undefined} />
         <StatCard label="Cartelas ativas" value={data.activeGame?.activeTickets || 0} color="var(--success)" />
       </div>

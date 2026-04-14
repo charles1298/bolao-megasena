@@ -53,13 +53,19 @@ async function updateProfile(req, res) {
  */
 async function getMyStats(req, res) {
   try {
-    const tickets = await prisma.ticket.findMany({
-      where: { userId: req.user.id },
-      include: {
-        payment: { select: { status: true } },
-        game: { select: { name: true, status: true } },
-      },
-    });
+    const [tickets, user] = await Promise.all([
+      prisma.ticket.findMany({
+        where: { userId: req.user.id },
+        include: {
+          payment: { select: { status: true } },
+          game: { select: { name: true, status: true } },
+        },
+      }),
+      prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { balance: true },
+      }),
+    ]);
 
     const activeTickets = tickets.filter((t) => t.status === 'active');
     const winners = tickets.filter((t) => t.status === 'winner');
@@ -73,6 +79,9 @@ async function getMyStats(req, res) {
     const totalPrize = tickets
       .reduce((sum, t) => sum + Number(t.prizeAmount || 0), 0);
 
+    const bestHits = tickets.reduce((max, t) => Math.max(max, t.totalHits || 0), 0);
+    const totalHits = tickets.reduce((sum, t) => sum + (t.totalHits || 0), 0);
+
     res.json({
       totalTickets: tickets.length,
       activeTickets: activeTickets.length,
@@ -81,6 +90,9 @@ async function getMyStats(req, res) {
       peFrio: peFrio.length,
       totalSpent: totalSpent.toFixed(2),
       totalPrize: totalPrize.toFixed(2),
+      bestHits,
+      totalHits,
+      balance: Number(user?.balance || 0).toFixed(2),
     });
   } catch (err) {
     logger.safeError('Erro ao buscar estatísticas', err);

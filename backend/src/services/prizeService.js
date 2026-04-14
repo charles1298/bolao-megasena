@@ -61,6 +61,9 @@ async function distributePrizes(gameId) {
 
   const updates = [];
 
+  // Acumula prêmio por userId para atualizar balance depois
+  const userPrizeMap = {};
+
   for (const ticket of winners) {
     updates.push(
       prisma.ticket.update({
@@ -68,6 +71,7 @@ async function distributePrizes(gameId) {
         data: { prizeAmount: perWinner.toFixed(2) },
       })
     );
+    userPrizeMap[ticket.userId] = (userPrizeMap[ticket.userId] || 0) + perWinner;
   }
 
   for (const ticket of peQuenteTickets) {
@@ -78,6 +82,7 @@ async function distributePrizes(gameId) {
         data: { prizeAmount: (current + perPeQuente).toFixed(2) },
       })
     );
+    userPrizeMap[ticket.userId] = (userPrizeMap[ticket.userId] || 0) + perPeQuente;
   }
 
   for (const ticket of peFrioTickets) {
@@ -86,6 +91,17 @@ async function distributePrizes(gameId) {
       prisma.ticket.update({
         where: { id: ticket.id },
         data: { prizeAmount: (current + perPeFrio).toFixed(2) },
+      })
+    );
+    userPrizeMap[ticket.userId] = (userPrizeMap[ticket.userId] || 0) + perPeFrio;
+  }
+
+  // Atualiza saldo de cada usuário premiado
+  for (const [userId, amount] of Object.entries(userPrizeMap)) {
+    updates.push(
+      prisma.user.update({
+        where: { id: userId },
+        data: { balance: { increment: parseFloat(amount.toFixed(2)) } },
       })
     );
   }

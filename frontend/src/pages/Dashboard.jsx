@@ -55,9 +55,14 @@ export default function Dashboard() {
 
       {/* Estatísticas */}
       {stats && (
-        <div className="grid-4" style={{ marginBottom: 32 }}>
-          <StatCard label="Total de cartelas"  value={stats.totalTickets} />
-          <StatCard label="Cartelas ativas"    value={stats.activeTickets}  accent="var(--forest3)" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 16, marginBottom: 32 }}>
+          <StatCard label="Total de cartelas" value={stats.totalTickets} />
+          <StatCard label="Cartelas ativas"   value={stats.activeTickets} accent="var(--forest3)" />
+          <StatCard
+            label="Melhor acerto"
+            value={`${stats.bestHits ?? 0} / 6`}
+            accent={stats.bestHits >= 4 ? 'var(--gold2)' : undefined}
+          />
           <StatCard
             label="Investido"
             value={`R$ ${Number(stats.totalSpent).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
@@ -66,6 +71,11 @@ export default function Dashboard() {
             label="Prêmios ganhos"
             value={`R$ ${Number(stats.totalPrize).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
             accent={Number(stats.totalPrize) > 0 ? 'var(--gold2)' : undefined}
+          />
+          <StatCard
+            label="Saldo em conta"
+            value={`R$ ${Number(stats.balance ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            accent={Number(stats.balance) > 0 ? 'var(--forest3)' : undefined}
           />
         </div>
       )}

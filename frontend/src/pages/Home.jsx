@@ -32,17 +32,33 @@ function useCountdown(target) {
 
 export default function Home() {
   const { isAuthenticated } = useAuth();
-  const [game,    setGame]    = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [game,       setGame]       = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [megaSena,   setMegaSena]   = useState(null);
+  const [msLoading,  setMsLoading]  = useState(true);
 
-  const drawTarget  = getNextDraw().getTime();
-  const countdown   = useCountdown(drawTarget);
+  const drawTarget = getNextDraw().getTime();
+  const countdown  = useCountdown(drawTarget);
 
   useEffect(() => {
     api.get('/game/current')
       .then(({ data }) => setGame(data))
       .catch(() => setGame(null))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Busca resultado Mega Sena e atualiza a cada 5 minutos
+  useEffect(() => {
+    function fetchMegaSena() {
+      setMsLoading(true);
+      api.get('/game/mega-sena/latest')
+        .then(({ data }) => setMegaSena(data))
+        .catch(() => setMegaSena(null))
+        .finally(() => setMsLoading(false));
+    }
+    fetchMegaSena();
+    const interval = setInterval(fetchMegaSena, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const prize65 = game
@@ -181,6 +197,80 @@ export default function Home() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ── Último Resultado Mega Sena ── */}
+      <div style={{ marginBottom: '2.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+          <h2 className="section-title" style={{ margin: 0 }}>Último <span>Resultado</span> Mega Sena</h2>
+          {megaSena && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Concurso #{megaSena.contestNumber} · {megaSena.drawDateFormatted}
+              {megaSena.accumulated && (
+                <span style={{ marginLeft: 8, color: 'var(--warning)', fontWeight: 600 }}>ACUMULADO</span>
+              )}
+            </span>
+          )}
+        </div>
+
+        {msLoading ? (
+          <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+            <div className="spinner" style={{ margin: '0 auto' }} />
+          </div>
+        ) : megaSena ? (
+          <div className="card">
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 12 }}>
+              Dezenas sorteadas
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
+              {megaSena.numbers.map((n, i) => (
+                <span key={n} className="drawn-ball" style={{ animationDelay: `${i * 0.08}s` }}>
+                  {String(n).padStart(2, '0')}
+                </span>
+              ))}
+            </div>
+
+            {megaSena.prizes?.length > 0 && (
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr><th>Faixa</th><th>Ganhadores</th><th>Prêmio individual</th></tr>
+                  </thead>
+                  <tbody>
+                    {megaSena.prizes.map((p, i) => (
+                      <tr key={i}>
+                        <td style={{ fontWeight: 600 }}>{p.tier}</td>
+                        <td>{p.winners}</td>
+                        <td style={{ color: p.prize > 0 ? 'var(--gold)' : 'var(--text-muted)' }}>
+                          {p.prize > 0
+                            ? `R$ ${Number(p.prize).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                            : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {megaSena.nextPrizeEstimate > 0 && (
+              <p style={{ marginTop: 14, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                Estimativa próximo concurso:{' '}
+                <strong style={{ color: 'var(--gold)' }}>
+                  R$ {Number(megaSena.nextPrizeEstimate).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </strong>
+              </p>
+            )}
+
+            <p style={{ marginTop: 10, fontSize: '0.72rem', color: 'rgba(255,255,255,.25)' }}>
+              Atualizado automaticamente a cada 5 minutos · Fonte: Caixa Econômica Federal
+            </p>
+          </div>
+        ) : (
+          <div className="card" style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+            Resultado indisponível no momento. Verifique diretamente no site da Caixa Econômica Federal.
+          </div>
+        )}
       </div>
 
       {/* ── Botão final ── */}

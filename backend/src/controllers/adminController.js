@@ -373,6 +373,7 @@ async function getDashboard(req, res) {
           }
         : null,
       totalRevenue: Number(totalRevenue._sum.amount || 0).toFixed(2),
+      houseCut: (Number(totalRevenue._sum.amount || 0) * 0.20).toFixed(2),
       pendingPayments,
       recentTickets,
     });
