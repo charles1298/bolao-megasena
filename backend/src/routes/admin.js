@@ -21,6 +21,7 @@ const {
 const { authenticate } = require('../middlewares/auth');
 const { requireAdmin } = require('../middlewares/admin');
 const { validate, sanitizeBody } = require('../middlewares/validate');
+const { adminSensitiveLimiter } = require('../middlewares/rateLimiter');
 
 // Todos os endpoints admin exigem JWT + role admin
 router.use(authenticate, requireAdmin);
@@ -59,6 +60,7 @@ router.patch(
 // ─── Sorteios ─────────────────────────────────────────────────
 router.post(
   '/games/:id/draws',
+  adminSensitiveLimiter,
   sanitizeBody,
   [
     param('id').isUUID(),
@@ -77,6 +79,7 @@ router.post(
 // ─── Prêmios ──────────────────────────────────────────────────
 router.post(
   '/games/:id/prizes',
+  adminSensitiveLimiter,
   [param('id').isUUID()],
   validate,
   processPrizes
@@ -108,7 +111,15 @@ router.get(
 // ─── Reset de senha de usuário (pelo admin) ───────────────────
 router.post(
   '/users/:id/reset-password',
-  [param('id').isUUID(), body('newPassword').isLength({ min: 6 })],
+  adminSensitiveLimiter,
+  [
+    param('id').isUUID(),
+    body('newPassword')
+      .isLength({ min: 8 })
+      .withMessage('Nova senha deve ter ao menos 8 caracteres.')
+      .matches(/[A-Z]/).withMessage('Nova senha deve ter ao menos uma letra maiúscula.')
+      .matches(/\d/).withMessage('Nova senha deve ter ao menos um número.'),
+  ],
   validate,
   resetUserPassword
 );
@@ -144,6 +155,6 @@ router.get(
 
 // ─── Resultado Oficial Mega Sena ──────────────────────────────
 router.get('/mega-sena/latest', fetchOfficialResult);
-router.post('/mega-sena/sync', syncOfficialResult);
+router.post('/mega-sena/sync', adminSensitiveLimiter, syncOfficialResult);
 
 module.exports = router;

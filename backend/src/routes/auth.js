@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
 const { register, login, refresh, logout } = require('../controllers/authController');
-const { loginLimiter, registerLimiter } = require('../middlewares/rateLimiter');
+const { loginLimiter, registerLimiter, refreshLimiter } = require('../middlewares/rateLimiter');
 const { validate, sanitizeBody } = require('../middlewares/validate');
 const { authenticate } = require('../middlewares/auth');
 
@@ -50,6 +50,7 @@ router.post(
 // POST /api/auth/refresh
 router.post(
   '/refresh',
+  refreshLimiter,
   [body('refreshToken').notEmpty().withMessage('Refresh token obrigatório.')],
   validate,
   refresh

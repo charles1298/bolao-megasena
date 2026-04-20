@@ -468,26 +468,27 @@ async function syncOfficialResult(req, res) {
  * Admin redefine a senha de um usuário (sem precisar da senha atual).
  */
 async function resetUserPassword(req, res) {
-  const bcrypt = require('bcryptjs');
+  const bcrypt = require('bcrypt');
   try {
     const { id } = req.params;
     const { newPassword } = req.body;
-
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(422).json({ error: 'Nova senha deve ter ao menos 6 caracteres.' });
-    }
 
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
     const rounds = parseInt(process.env.BCRYPT_ROUNDS || '12');
     const hash = await bcrypt.hash(newPassword, rounds);
-    await prisma.user.update({ where: { id }, data: { passwordHash: hash } });
+
+    // Altera senha e invalida todas as sessões do usuário simultaneamente
+    await prisma.$transaction([
+      prisma.user.update({ where: { id }, data: { passwordHash: hash } }),
+      prisma.refreshToken.deleteMany({ where: { userId: id } }),
+    ]);
 
     await logAdminAction(req.user.id, 'USER_PASSWORD_RESET', { targetUserId: id, nickname: user.nickname }, req.ip);
-    logger.info('Senha redefinida pelo admin', { targetUserId: id, adminId: req.user.id });
+    logger.info('Senha redefinida pelo admin — sessões revogadas', { targetUserId: id, adminId: req.user.id });
 
-    res.json({ message: `Senha de ${user.nickname} redefinida com sucesso.` });
+    res.json({ message: `Senha de ${user.nickname} redefinida. Todas as sessões foram encerradas.` });
   } catch (err) {
     logger.safeError('Erro ao redefinir senha', err);
     res.status(500).json({ error: 'Erro ao redefinir senha.' });

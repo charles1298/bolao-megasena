@@ -105,7 +105,7 @@ async function getMyStats(req, res) {
  * Troca a senha do usuário autenticado.
  */
 async function changePassword(req, res) {
-  const bcrypt = require('bcryptjs');
+  const bcrypt = require('bcrypt');
   try {
     const { currentPassword, newPassword } = req.body;
 
@@ -115,10 +115,15 @@ async function changePassword(req, res) {
 
     const rounds = parseInt(process.env.BCRYPT_ROUNDS || '12');
     const hash = await bcrypt.hash(newPassword, rounds);
-    await prisma.user.update({ where: { id: req.user.id }, data: { passwordHash: hash } });
 
-    logger.info('Senha alterada', { userId: req.user.id });
-    res.json({ message: 'Senha alterada com sucesso.' });
+    // Invalida todas as sessões existentes (exceto a atual) após troca de senha
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: req.user.id }, data: { passwordHash: hash } }),
+      prisma.refreshToken.deleteMany({ where: { userId: req.user.id } }),
+    ]);
+
+    logger.info('Senha alterada — sessões revogadas', { userId: req.user.id });
+    res.json({ message: 'Senha alterada com sucesso. Faça login novamente nos outros dispositivos.' });
   } catch (err) {
     logger.safeError('Erro ao trocar senha', err);
     res.status(500).json({ error: 'Erro ao trocar senha.' });

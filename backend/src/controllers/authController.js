@@ -8,6 +8,42 @@ const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
+// Máximo de refresh tokens simultâneos: admin usa 2 (menos superfície), player usa 5
+const MAX_REFRESH_TOKENS = { admin: 2, player: 5 };
+
+// Tentativas de login falhas antes de bloquear a conta (por nickname)
+const MAX_FAILED_LOGIN_ATTEMPTS = 10;
+const FAILED_LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 min
+
+/**
+ * Remove os refresh tokens mais antigos se o usuário ultrapassar o limite por role.
+ */
+async function pruneOldRefreshTokens(userId, role) {
+  const max = MAX_REFRESH_TOKENS[role] ?? 5;
+  const tokens = await prisma.refreshToken.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  if (tokens.length >= max) {
+    const excess = tokens.slice(0, tokens.length - max + 1);
+    await prisma.refreshToken.deleteMany({
+      where: { id: { in: excess.map((t) => t.id) } },
+    });
+  }
+}
+
+/**
+ * Verifica se uma conta está bloqueada por excesso de tentativas falhas.
+ */
+async function isAccountLocked(nickname) {
+  const since = new Date(Date.now() - FAILED_LOGIN_WINDOW_MS);
+  const failures = await prisma.loginAttempt.count({
+    where: { nickname, success: false, createdAt: { gte: since } },
+  });
+  return failures >= MAX_FAILED_LOGIN_ATTEMPTS;
+}
+
 function generateAccessToken(user) {
   return jwt.sign(
     { sub: user.id, nickname: user.nickname, role: user.role },
@@ -51,7 +87,9 @@ async function register(req, res) {
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
-    // Salva refresh token no banco
+    // Remove tokens antigos excedentes antes de criar o novo
+    await pruneOldRefreshTokens(user.id, user.role);
+
     await prisma.refreshToken.create({
       data: {
         userId: user.id,
@@ -75,6 +113,14 @@ async function login(req, res) {
   try {
     const { nickname, password } = req.body;
     const ip = req.ip;
+
+    // Verifica lockout por excesso de falhas neste nickname
+    if (await isAccountLocked(nickname)) {
+      return res.status(429).json({
+        error: 'Conta temporariamente bloqueada por excesso de tentativas. Aguarde 15 minutos.',
+        code: 'ACCOUNT_LOCKED',
+      });
+    }
 
     const user = await prisma.user.findUnique({
       where: { nickname },
@@ -119,6 +165,9 @@ async function login(req, res) {
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
+    // Remove tokens antigos excedentes antes de criar o novo (limite por role)
+    await pruneOldRefreshTokens(user.id, user.role);
+
     await prisma.refreshToken.create({
       data: {
         userId: user.id,
@@ -127,12 +176,16 @@ async function login(req, res) {
       },
     });
 
-    logger.info('Login realizado', { userId: user.id, ip });
+    logger.info('Login realizado', { userId: user.id, ip, role: user.role });
 
     res.json({
       user: { id: user.id, nickname: user.nickname, role: user.role },
       accessToken,
       refreshToken,
+      // Avisa admin sem 2FA configurado (não bloqueia, mas incentiva)
+      ...(user.role === 'admin' && !user.totpEnabled
+        ? { securityWarning: 'Ative o 2FA no painel admin para aumentar a segurança da conta.' }
+        : {}),
     });
   } catch (err) {
     logger.safeError('Erro no login', err);

@@ -3,6 +3,7 @@ const { body } = require('express-validator');
 const { getProfile, updateProfile, getMyStats, changePassword } = require('../controllers/userController');
 const { authenticate } = require('../middlewares/auth');
 const { validate, sanitizeBody } = require('../middlewares/validate');
+const { passwordChangeLimiter } = require('../middlewares/rateLimiter');
 
 router.use(authenticate);
 
@@ -25,6 +26,7 @@ router.get('/me/stats', getMyStats);
 
 router.put(
   '/me/password',
+  passwordChangeLimiter,
   sanitizeBody,
   [
     body('currentPassword').notEmpty().withMessage('Senha atual obrigatória.'),

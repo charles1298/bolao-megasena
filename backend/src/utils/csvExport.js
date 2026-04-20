@@ -1,11 +1,16 @@
 /**
  * Gera CSV seguro sem dependências externas.
- * Escapa campos que contenham vírgulas, aspas ou quebras de linha.
+ * Escapa campos com vírgulas, aspas ou quebras de linha.
+ * Prefixo de tabulação previne formula injection no Excel/Sheets.
  */
 function escapeField(value) {
   if (value === null || value === undefined) return '';
-  const str = String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+  let str = String(value);
+  // Previne CSV formula injection (=, @, +, - como primeiro caractere)
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = '\t' + str;
+  }
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\t')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
