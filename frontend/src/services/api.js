@@ -55,12 +55,17 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
+        // Verifica tanto localStorage (manter conectado) quanto sessionStorage (sessão)
+        const refreshToken =
+          localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
         if (!refreshToken) throw new Error('Sem refresh token');
 
         const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
-        localStorage.setItem('accessToken', data.accessToken);
-        localStorage.setItem('refreshToken', data.refreshToken);
+
+        // Salva no mesmo storage onde estava o token anterior
+        const storage = localStorage.getItem('refreshToken') ? localStorage : sessionStorage;
+        storage.setItem('accessToken', data.accessToken);
+        storage.setItem('refreshToken', data.refreshToken);
 
         api.defaults.headers.Authorization = `Bearer ${data.accessToken}`;
         processQueue(null, data.accessToken);
@@ -70,6 +75,8 @@ api.interceptors.response.use(
         processQueue(refreshError, null);
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
+        sessionStorage.removeItem('accessToken');
+        sessionStorage.removeItem('refreshToken');
         window.location.href = '/login?session=expired';
         return Promise.reject(refreshError);
       } finally {

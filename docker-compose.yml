@@ -63,7 +63,7 @@ services:
       DATABASE_URL: postgresql://bolao_user:${POSTGRES_PASSWORD}@db:5432/bolao_megasena
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      JWT_EXPIRES_IN: 7d
+      JWT_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 30d
       BCRYPT_ROUNDS: 12
       FRONTEND_URL: ${FRONTEND_URL}

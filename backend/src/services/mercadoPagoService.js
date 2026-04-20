@@ -85,8 +85,10 @@ async function getPaymentStatus(mpPaymentId) {
 function validateWebhookSignature(req) {
   const secret = process.env.MP_WEBHOOK_SECRET;
   if (!secret) {
-    logger.warn('MP_WEBHOOK_SECRET não configurado — validação de webhook desativada.');
-    return true; // Em desenvolvimento, aceita sem validar
+    // Sem secret configurado, rejeita para não permitir aprovação falsa de pagamentos.
+    // Configure MP_WEBHOOK_SECRET no .env para habilitar o recebimento de webhooks.
+    logger.error('MP_WEBHOOK_SECRET não configurado — webhook REJEITADO por segurança.');
+    return false;
   }
 
   const xSignature = req.headers['x-signature'];

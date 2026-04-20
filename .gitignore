@@ -4,6 +4,12 @@
 .env.*.local
 .env.android
 
+# Scripts de deploy — contêm credenciais do servidor
+deploy.mjs
+package.json
+package-lock.json
+node_modules/
+
 # Node
 node_modules/
 frontend/node_modules/
