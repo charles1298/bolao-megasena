@@ -188,7 +188,8 @@ async function getMyTickets(req, res) {
       where: { userId: req.user.id },
       include: {
         game: { select: { id: true, name: true, status: true, drawCount: true } },
-        payment: { select: { status: true, paidAt: true, pixCode: true, expiresAt: true } },
+        // pixCode e expiresAt omitidos — não expõe código PIX na listagem geral
+        payment: { select: { status: true, paidAt: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -211,7 +212,8 @@ async function getTicketById(req, res) {
       where: { id, userId: req.user.id },
       include: {
         game: true,
-        payment: { select: { status: true, paidAt: true, pixCode: true, expiresAt: true } },
+        // pixCode omitido — quem precisa do código usa o endpoint de pagamento
+        payment: { select: { status: true, paidAt: true, expiresAt: true } },
       },
     });
 
@@ -236,6 +238,12 @@ async function getRanking(req, res) {
     const game = await prisma.game.findFirst({
       where: { status: { in: ['active', 'finished'] } },
       orderBy: { createdAt: 'desc' },
+      include: {
+        draws: {
+          orderBy: { drawOrder: 'desc' },
+          select: { id: true, drawDate: true, numbers: true, drawOrder: true },
+        },
+      },
     });
 
     if (!game) {
@@ -252,7 +260,7 @@ async function getRanking(req, res) {
       },
       orderBy: [
         { totalHits: 'desc' },
-        { createdAt: 'asc' }, // desempate: quem apostou primeiro
+        { createdAt: 'asc' },
       ],
     });
 
@@ -261,6 +269,7 @@ async function getRanking(req, res) {
       nickname: t.user.nickname,
       numbers: t.numbers,
       totalHits: t.totalHits,
+      hitHistory: Array.isArray(t.hitHistory) ? t.hitHistory : [],
       status: t.status,
       isPeQuente: t.isPeQuente,
       isPeFrio: t.isPeFrio,
@@ -275,6 +284,7 @@ async function getRanking(req, res) {
         status: game.status,
         drawCount: game.drawCount,
         accumulatedNumbers: game.accumulatedNumbers,
+        draws: game.draws,
       },
     });
   } catch (err) {

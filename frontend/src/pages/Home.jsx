@@ -215,12 +215,6 @@ export default function Home() {
           <div className="prize-pct" style={{ color: '#60a5fa' }}>5%</div>
           <div className="prize-desc">do fundo total</div>
         </div>
-        <div className="prize-card">
-          <div className="prize-icon">🏦</div>
-          <div className="prize-name">Casa</div>
-          <div className="prize-pct" style={{ color: 'rgba(250,247,240,.4)' }}>20%</div>
-          <div className="prize-desc">administração</div>
-        </div>
       </div>
 
       {/* ── Como funciona ── */}
@@ -241,17 +235,7 @@ export default function Home() {
 
       {/* ── Último Resultado Mega Sena ── */}
       <div style={{ marginBottom: '2.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-          <h2 className="section-title" style={{ margin: 0 }}>Último <span>Resultado</span> Mega Sena</h2>
-          {megaSena && (
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Concurso #{megaSena.contestNumber} · {megaSena.drawDateFormatted}
-              {megaSena.accumulated && (
-                <span style={{ marginLeft: 8, color: 'var(--warning)', fontWeight: 600 }}>ACUMULADO</span>
-              )}
-            </span>
-          )}
-        </div>
+        <h2 className="section-title">Último <span>Resultado</span> Mega Sena</h2>
 
         {msLoading ? (
           <div className="card" style={{ textAlign: 'center', padding: 32 }}>
@@ -259,52 +243,16 @@ export default function Home() {
           </div>
         ) : megaSena ? (
           <div className="card">
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 12 }}>
-              Dezenas sorteadas
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+              {megaSena.drawDateFormatted}
             </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {megaSena.numbers.map((n, i) => (
                 <span key={n} className="drawn-ball" style={{ animationDelay: `${i * 0.08}s` }}>
                   {String(n).padStart(2, '0')}
                 </span>
               ))}
             </div>
-
-            {megaSena.prizes?.length > 0 && (
-              <div className="table-wrapper">
-                <table>
-                  <thead>
-                    <tr><th>Faixa</th><th>Ganhadores</th><th>Prêmio individual</th></tr>
-                  </thead>
-                  <tbody>
-                    {megaSena.prizes.map((p, i) => (
-                      <tr key={i}>
-                        <td style={{ fontWeight: 600 }}>{p.tier}</td>
-                        <td>{p.winners}</td>
-                        <td style={{ color: p.prize > 0 ? 'var(--gold)' : 'var(--text-muted)' }}>
-                          {p.prize > 0
-                            ? `R$ ${Number(p.prize).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                            : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {megaSena.nextPrizeEstimate > 0 && (
-              <p style={{ marginTop: 14, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                Estimativa próximo concurso:{' '}
-                <strong style={{ color: 'var(--gold)' }}>
-                  R$ {Number(megaSena.nextPrizeEstimate).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </strong>
-              </p>
-            )}
-
-            <p style={{ marginTop: 10, fontSize: '0.72rem', color: 'rgba(255,255,255,.25)' }}>
-              Atualizado automaticamente a cada 5 minutos · Fonte: Caixa Econômica Federal
-            </p>
           </div>
         ) : (
           <div className="card" style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
