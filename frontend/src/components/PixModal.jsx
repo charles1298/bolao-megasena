@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 
-const WHATSAPP = import.meta.env.VITE_ADMIN_WHATSAPP || '5517991571909';
-const PIX_KEY  = import.meta.env.VITE_PIX_KEY        || '17991571909';
+const WHATSAPP = import.meta.env.VITE_ADMIN_WHATSAPP;
+const PIX_KEY  = import.meta.env.VITE_PIX_KEY;
 
 export default function PixModal({ manual, paymentId, pixCode, qrCodeBase64, expiresAt, amount, ticketIds, onClose, onConfirmed }) {
   return manual

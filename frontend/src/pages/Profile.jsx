@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const WHATSAPP = import.meta.env.VITE_ADMIN_WHATSAPP || '5517991571909';
+const WHATSAPP = import.meta.env.VITE_ADMIN_WHATSAPP;
 
 export default function Profile() {
   const { user } = useAuth();

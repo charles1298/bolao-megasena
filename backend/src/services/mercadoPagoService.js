@@ -108,6 +108,13 @@ function validateWebhookSignature(req) {
 
   if (!ts || !v1) return false;
 
+  // Rejeita webhooks com timestamp mais antigo que 5 minutos (replay attack)
+  const ageSeconds = (Date.now() / 1000) - Number(ts);
+  if (ageSeconds > 300 || ageSeconds < -60) {
+    logger.warn('Webhook MP rejeitado: timestamp fora do intervalo', { ts, ageSeconds: Math.round(ageSeconds) });
+    return false;
+  }
+
   const dataId = req.query['data.id'] || req.body?.data?.id;
   const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
   const expectedHash = crypto
