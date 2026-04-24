@@ -56,7 +56,7 @@ function generateRefreshToken(user) {
   return jwt.sign(
     { sub: user.id, type: 'refresh' },
     JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' }
+    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
   );
 }
 

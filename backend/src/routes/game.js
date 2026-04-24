@@ -10,15 +10,16 @@ const {
 } = require('../controllers/gameController');
 const { authenticate } = require('../middlewares/auth');
 const { validate } = require('../middlewares/validate');
+const { publicLimiter } = require('../middlewares/rateLimiter');
 
 // GET /api/game/current — público
-router.get('/current', getCurrentGame);
+router.get('/current', publicLimiter, getCurrentGame);
 
 // GET /api/game/ranking — público
-router.get('/ranking', getRanking);
+router.get('/ranking', publicLimiter, getRanking);
 
 // GET /api/game/mega-sena/latest — público
-router.get('/mega-sena/latest', getLatestMegaSena);
+router.get('/mega-sena/latest', publicLimiter, getLatestMegaSena);
 
 // POST /api/game/tickets — autenticado
 router.post(

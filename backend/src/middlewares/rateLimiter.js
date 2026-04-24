@@ -6,11 +6,23 @@ const rateLimit = require('express-rate-limit');
  */
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: 80,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Muitas requisições. Tente novamente em 15 minutos.' },
   skipSuccessfulRequests: false,
+});
+
+/**
+ * Rate limiter para endpoints públicos (ranking, jogo atual, Mega Sena).
+ * 60 req / minuto por IP — permite uso normal mas bloqueia scraping.
+ */
+const publicLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Muitas requisições. Aguarde 1 minuto.' },
 });
 
 /**
@@ -104,6 +116,7 @@ const passwordChangeLimiter = rateLimit({
 
 module.exports = {
   generalLimiter,
+  publicLimiter,
   loginLimiter,
   registerLimiter,
   webhookLimiter,

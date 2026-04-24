@@ -64,8 +64,8 @@ app.use((req, res, next) => {
 // ─── CORS — apenas frontend autorizado ────────────────────────────────────────
 const allowedOrigins = [
   process.env.FRONTEND_URL,
-  // Em dev, permite localhost
-  ...(process.env.NODE_ENV !== 'production'
+  // Permite localhost apenas quando NODE_ENV é explicitamente 'development'
+  ...(process.env.NODE_ENV === 'development'
     ? ['http://localhost:5173', 'http://localhost:3000']
     : []),
 ].filter(Boolean);

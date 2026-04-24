@@ -66,7 +66,9 @@ router.post(
     param('id').isUUID(),
     body('numbers')
       .isArray({ min: 6, max: 6 })
-      .withMessage('Informe exatamente 6 números.'),
+      .withMessage('Informe exatamente 6 números.')
+      .custom((arr) => new Set(arr).size === arr.length)
+      .withMessage('Os 6 números do sorteio devem ser únicos.'),
     body('numbers.*')
       .isInt({ min: 1, max: 60 })
       .withMessage('Números devem ser inteiros entre 1 e 60.'),

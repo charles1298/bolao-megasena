@@ -15,8 +15,8 @@ router.patch(
   [
     body('whatsapp')
       .optional({ nullable: true })
-      .matches(/^\d{10,15}$/)
-      .withMessage('WhatsApp inválido.'),
+      .matches(/^(55\d{10,11}|\d{10,11})$/)
+      .withMessage('WhatsApp inválido. Use DDD + número (ex: 5511999999999).'),
   ],
   validate,
   updateProfile
