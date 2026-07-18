@@ -4,11 +4,25 @@
 .env.*.local
 .env.android
 
-# Scripts de deploy — contêm credenciais do servidor
+# Scripts de deploy/manutenção — contêm credenciais do servidor
 deploy.mjs
-package.json
-package-lock.json
+*_temp.mjs
+check_logs.mjs
+delete_users.mjs
+# Scripts auxiliares na RAIZ do projeto (deploy_*.py, check_*.py, update_token.py...)
+/deploy_*.py
+/check_*.py
+/update_token.py
+/fix_qr.py
+/reset_pw_*.mjs
+/verify_pw_*.mjs
+# package.json/lock APENAS da raiz (os de backend/ e frontend/ devem ser versionados)
+/package.json
+/package-lock.json
 node_modules/
+
+# Claude Code — pode conter permissões com credenciais
+.claude/
 
 # Node
 node_modules/
