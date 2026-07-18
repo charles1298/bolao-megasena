@@ -6,11 +6,36 @@ import { useAuth } from '../context/AuthContext';
 const WHATSAPP = import.meta.env.VITE_ADMIN_WHATSAPP;
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [loading, setLoading] = useState(false);
   const [whatsapp, setWhatsapp] = useState(user?.whatsapp || '');
   const [savingWpp, setSavingWpp] = useState(false);
+  const [deletePass, setDeletePass] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+
+  async function handleDeleteAccount(e) {
+    e.preventDefault();
+    if (!deletePass) return toast.error('Confirme sua senha.');
+    if (!window.confirm(
+      'Tem CERTEZA que quer excluir sua conta?\n\n' +
+      '• Você não conseguirá mais fazer login\n' +
+      '• Seu apelido e WhatsApp serão removidos\n' +
+      '• Cartelas e pagamentos antigos permanecem por exigência fiscal, mas sem seus dados\n\n' +
+      'Esta ação NÃO pode ser desfeita.'
+    )) return;
+    setDeleting(true);
+    try {
+      await api.delete('/users/me', { data: { password: deletePass } });
+      toast.success('Conta excluída. Até mais!');
+      setTimeout(() => logout(), 1500);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao excluir conta.');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   function handleChange(e) {
     setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
@@ -50,7 +75,7 @@ export default function Profile() {
   }
 
   const forgotMsg = encodeURIComponent(
-    `Olá! Preciso redefinir minha senha no Bolão Mega Sena.\nMeu apelido: ${user?.nickname}`
+    `Olá! Preciso redefinir minha senha na GoPremiada.\nMeu apelido: ${user?.nickname}`
   );
 
   return (
@@ -138,6 +163,67 @@ export default function Profile() {
           </svg>
           Falar com o Admin
         </a>
+      </div>
+
+      {/* ── Excluir conta (LGPD) ── */}
+      <div className="card" style={{ marginTop: 24, borderColor: 'rgba(239,68,68,.25)', background: 'rgba(239,68,68,.03)' }}>
+        <h4 style={{ marginBottom: 8, color: 'var(--error)' }}>Zona de perigo</h4>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: 16 }}>
+          Excluir sua conta remove seu apelido, WhatsApp e senha do sistema. Cartelas e pagamentos antigos são mantidos sem seus dados pessoais (exigência fiscal). Você não conseguirá mais fazer login.
+        </p>
+        {!showDelete ? (
+          <button
+            type="button"
+            onClick={() => setShowDelete(true)}
+            style={{
+              padding: '10px 20px',
+              background: 'transparent',
+              color: 'var(--error)',
+              border: '1px solid rgba(239,68,68,.4)',
+              borderRadius: 40,
+              fontWeight: 600, fontSize: '0.88rem',
+              cursor: 'pointer',
+            }}
+          >
+            Excluir minha conta
+          </button>
+        ) : (
+          <form onSubmit={handleDeleteAccount}>
+            <div className="input-group">
+              <label>Confirme sua senha atual para prosseguir</label>
+              <input
+                className="input" type="password"
+                value={deletePass} onChange={(e) => setDeletePass(e.target.value)}
+                placeholder="Sua senha"
+                required autoComplete="current-password"
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                type="submit"
+                disabled={deleting}
+                style={{
+                  padding: '10px 20px',
+                  background: 'var(--error)', color: '#fff',
+                  border: 'none', borderRadius: 40,
+                  fontWeight: 600, fontSize: '0.88rem',
+                  cursor: deleting ? 'wait' : 'pointer', opacity: deleting ? 0.7 : 1,
+                }}
+              >
+                {deleting ? 'Excluindo...' : 'Confirmar exclusão definitiva'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowDelete(false); setDeletePass(''); }}
+                disabled={deleting}
+                className="btn btn-secondary"
+                style={{ padding: '10px 20px' }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

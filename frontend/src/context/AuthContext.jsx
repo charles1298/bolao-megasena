@@ -38,8 +38,8 @@ export function AuthProvider({ children }) {
     return { success: true, user: data.user };
   }, []);
 
-  const register = useCallback(async (nickname, password, whatsapp) => {
-    const { data } = await api.post('/auth/register', { nickname, password, whatsapp });
+  const register = useCallback(async (nickname, password, whatsapp, cpf) => {
+    const { data } = await api.post('/auth/register', { nickname, password, whatsapp, cpf });
     localStorage.setItem('accessToken', data.accessToken);
     localStorage.setItem('refreshToken', data.refreshToken);
     localStorage.setItem('user', JSON.stringify(data.user));

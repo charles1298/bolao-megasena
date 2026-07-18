@@ -7,20 +7,40 @@ export default function Register() {
   const { register } = useAuth();
   const navigate     = useNavigate();
 
-  const [form,    setForm]    = useState({ nickname: '', password: '', confirm: '', whatsapp: '' });
+  const [form,    setForm]    = useState({ nickname: '', password: '', confirm: '', whatsapp: '', cpf: '' });
   const [loading, setLoading] = useState(false);
 
   function handleChange(e) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   }
 
+  // Validação CPF (mod 11) — espelha o backend pra catch antes do request
+  function isValidCpf(input) {
+    const cpf = String(input || '').replace(/\D/g, '');
+    if (cpf.length !== 11) return false;
+    if (/^(\d)\1{10}$/.test(cpf)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i++) sum += parseInt(cpf[i], 10) * (10 - i);
+    let d1 = (sum * 10) % 11; if (d1 === 10) d1 = 0;
+    if (d1 !== parseInt(cpf[9], 10)) return false;
+    sum = 0;
+    for (let i = 0; i < 10; i++) sum += parseInt(cpf[i], 10) * (11 - i);
+    let d2 = (sum * 10) % 11; if (d2 === 10) d2 = 0;
+    return d2 === parseInt(cpf[10], 10);
+  }
+
   function validate() {
     if (form.nickname.trim().length < 3)              return 'Apelido deve ter pelo menos 3 caracteres.';
     if (!/^[a-zA-Z0-9_\- ]+$/.test(form.nickname))   return 'Apelido: use apenas letras, números, espaço, _ e -.';
     if (form.password.length < 8)                     return 'Senha deve ter pelo menos 8 caracteres.';
+    if (!/[A-Z]/.test(form.password))                 return 'Senha deve conter ao menos uma letra maiúscula.';
+    if (!/\d/.test(form.password))                    return 'Senha deve conter ao menos um número.';
     if (form.password !== form.confirm)               return 'As senhas não coincidem.';
-    if (form.whatsapp && !/^\d{10,15}$/.test(form.whatsapp))
-      return 'WhatsApp inválido (apenas dígitos, 10-15 caracteres).';
+    if (!form.whatsapp.trim())                        return 'WhatsApp é obrigatório para contato sobre pagamentos.';
+    if (!/^(55\d{10,11}|\d{10,11})$/.test(form.whatsapp))
+      return 'WhatsApp inválido. Use DDD + número (ex: 5511999999999).';
+    if (!form.cpf.trim())                             return 'CPF é obrigatório.';
+    if (!isValidCpf(form.cpf))                        return 'CPF inválido.';
     return null;
   }
 
@@ -30,7 +50,7 @@ export default function Register() {
     if (err) { toast.error(err); return; }
     setLoading(true);
     try {
-      await register(form.nickname.trim(), form.password, form.whatsapp || undefined);
+      await register(form.nickname.trim(), form.password, form.whatsapp.trim(), form.cpf.replace(/\D/g, ''));
       toast.success('Conta criada! Bem-vindo!');
       navigate('/jogar');
     } catch (err) {
@@ -115,14 +135,30 @@ export default function Register() {
           </div>
 
           <div className="input-group">
-            <label htmlFor="whatsapp">WhatsApp (opcional)</label>
+            <label htmlFor="whatsapp">WhatsApp *</label>
             <input
               id="whatsapp" name="whatsapp" className="input" type="tel"
               value={form.whatsapp} onChange={handleChange}
-              placeholder="5511999999999" maxLength={15}
+              placeholder="5511999999999"
+              required minLength={10} maxLength={15} inputMode="numeric"
+              pattern="^(55\d{10,11}|\d{10,11})$"
             />
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-              Apenas dígitos com DDI. Usado para contato sobre prêmios.
+              Obrigatório. Usado para contato sobre pagamentos e prêmios. Apenas dígitos com DDD.
+            </span>
+          </div>
+
+          <div className="input-group">
+            <label htmlFor="cpf">CPF *</label>
+            <input
+              id="cpf" name="cpf" className="input" type="text"
+              value={form.cpf}
+              onChange={(e) => setForm((p) => ({ ...p, cpf: e.target.value.replace(/\D/g, '').slice(0, 11) }))}
+              placeholder="Apenas números"
+              required minLength={11} maxLength={11} inputMode="numeric"
+            />
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              Obrigatório. Necessário para verificação de idade (+18) e emissão de comprovante caso ganhe.
             </span>
           </div>
 

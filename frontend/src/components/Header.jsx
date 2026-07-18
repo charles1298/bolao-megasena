@@ -59,8 +59,15 @@ export default function Header() {
   const { user, isAuthenticated, isAdmin, logout } = useAuth();
   const navigate  = useNavigate();
   const location  = useLocation();
-  const [open, setOpen] = useState(false);
+  const [open,     setOpen]     = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const dropRef   = useRef(null);
+
+  useEffect(() => {
+    function onScroll() { setScrolled(window.scrollY > 12); }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     function handle(e) {
@@ -95,8 +102,14 @@ export default function Header() {
   return (
     <>
       {/* ── Topbar ── */}
-      <div className="topbar">
-        <Link to="/" className="logo-link">BOLÃO<span>MEGA</span></Link>
+      <div className={`topbar${scrolled ? ' scrolled' : ''}`}>
+        <Link to="/" className="logo-link" style={{ display: 'flex', alignItems: 'center', letterSpacing: 'normal' }}>
+          <img
+            src="/logo.png"
+            alt="GoPremiada"
+            style={{ height: 54, width: 'auto', objectFit: 'contain', flexShrink: 0 }}
+          />
+        </Link>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {isAuthenticated ? (
@@ -122,11 +135,12 @@ export default function Header() {
               </div>
 
               {open && (
-                <div style={{
+                <div className="dropdown-slide" style={{
                   position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-                  background: 'var(--bg-card)', border: '1px solid var(--border)',
-                  borderRadius: 12, minWidth: 190, zIndex: 999,
-                  boxShadow: '0 8px 32px rgba(0,0,0,.5)',
+                  background: 'rgba(20,26,36,.97)', border: '1px solid var(--border)',
+                  borderRadius: 14, minWidth: 200, zIndex: 999,
+                  boxShadow: '0 16px 48px rgba(0,0,0,.6), 0 0 0 1px rgba(212,168,67,.08)',
+                  backdropFilter: 'blur(16px)',
                   overflow: 'hidden',
                 }}>
                   {/* Cabeçalho do menu */}
@@ -135,9 +149,9 @@ export default function Header() {
                     <div style={{ fontWeight: 700, color: 'var(--gold2)', fontSize: '0.95rem' }}>{user?.nickname}</div>
                   </div>
 
-                  <DropItem to="/perfil"  onClick={() => setOpen(false)}>👤 Meu Perfil</DropItem>
-                  <DropItem to="/painel"  onClick={() => setOpen(false)}>🎯 Minhas Apostas</DropItem>
-                  {isAdmin && <DropItem to="/admin" onClick={() => setOpen(false)}>⚙️ Painel Admin</DropItem>}
+                  <DropItem to="/perfil"  onClick={() => setOpen(false)} icon={<IcoUser />}>Meu Perfil</DropItem>
+                  <DropItem to="/painel"  onClick={() => setOpen(false)} icon={<IcoTicket />}>Minhas Apostas</DropItem>
+                  {isAdmin && <DropItem to="/admin" onClick={() => setOpen(false)} icon={<IcoSettings />}>Painel Admin</DropItem>}
 
                   <button
                     type="button"
@@ -149,11 +163,12 @@ export default function Header() {
                       color: 'var(--error)', fontSize: '0.88rem',
                       cursor: 'pointer', textAlign: 'left',
                       borderTop: '1px solid var(--border)',
+                      transition: 'background .15s',
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,80,80,.08)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    🚪 Sair
+                    <IcoLogout /> Sair
                   </button>
                 </div>
               )}
@@ -204,7 +219,7 @@ export default function Header() {
   );
 }
 
-function DropItem({ to, onClick, children }) {
+function DropItem({ to, onClick, icon, children }) {
   return (
     <Link
       to={to}
@@ -214,11 +229,47 @@ function DropItem({ to, onClick, children }) {
         padding: '12px 16px', color: 'var(--text-primary)',
         textDecoration: 'none', fontSize: '0.88rem',
         borderBottom: '1px solid var(--border)',
+        transition: 'background .15s, color .15s',
       }}
-      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,.05)'}
-      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(212,168,67,.07)'; e.currentTarget.style.color = 'var(--gold2)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-primary)'; }}
     >
+      {icon && <span style={{ opacity: .7, display: 'flex' }}>{icon}</span>}
       {children}
     </Link>
+  );
+}
+
+/* ── Dropdown Icons ── */
+function IcoUser() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+    </svg>
+  );
+}
+function IcoTicket() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="5" width="20" height="14" rx="2"/>
+      <path d="M16 5v14M8 9h2M8 12h2M8 15h2"/>
+    </svg>
+  );
+}
+function IcoSettings() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14M12 2v2M12 20v2M2 12h2M20 12h2"/>
+    </svg>
+  );
+}
+function IcoLogout() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+      <polyline points="16 17 21 12 16 7"/>
+      <line x1="21" y1="12" x2="9" y2="12"/>
+    </svg>
   );
 }

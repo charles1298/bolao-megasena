@@ -8,11 +8,15 @@ COPY . .
 
 # Build de produção (variáveis injetadas no build via ARG)
 ARG VITE_API_URL=/api
-ARG VITE_ADMIN_WHATSAPP=5517991571909
+ARG VITE_ADMIN_WHATSAPP=5517997088020
 ARG VITE_PIX_KEY=17991571909
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_ADMIN_WHATSAPP=$VITE_ADMIN_WHATSAPP
 ENV VITE_PIX_KEY=$VITE_PIX_KEY
+
+# Lint guard — falha o build se houver violação das Rules of Hooks.
+# Bloqueia que bugs como "useEffect depois de early return" cheguem em produção.
+RUN npm run lint
 
 RUN npm run build
 

@@ -134,6 +134,11 @@ a:hover { color: var(--gold); }
   50%       { border-color: var(--gold2);        box-shadow: 0 0 44px rgba(212,168,67,.4); }
 }
 
+@keyframes livePulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%       { opacity: 0.3; transform: scale(0.7); }
+}
+
 @keyframes countUp {
   from { transform: translateY(6px); opacity: 0; }
   to   { transform: translateY(0);   opacity: 1; }
@@ -142,6 +147,42 @@ a:hover { color: var(--gold); }
 .fade-in  { animation: fadeIn 0.35s ease forwards; }
 .slide-up { animation: slideUp 0.3s ease forwards; }
 .pulse    { animation: pulse 1.5s ease infinite; }
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes revealUp {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes heroGradientAnim {
+  0%, 100% { background-position: 0% 50%; }
+  50%       { background-position: 100% 50%; }
+}
+
+@keyframes cartIn {
+  from { opacity: 0; transform: translateX(14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes skeletonShimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+
+@keyframes numberPop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.25); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes trophyFloat {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50%       { transform: translateY(-6px) rotate(2deg); }
+}
 
 /* ─── Partículas ─────────────────────────────────────────────────── */
 .particles {
@@ -327,6 +368,14 @@ a:hover { color: var(--gold); }
   color: var(--cream);
 }
 
+.btn-success {
+  background: rgba(38,168,106,.15);
+  border: 1px solid rgba(38,168,106,.35);
+  color: #26A86A;
+  padding: 10px 18px;
+}
+.btn-success:hover:not(:disabled) { background: rgba(38,168,106,.25); }
+
 .btn-danger {
   background: rgba(229,62,62,.12);
   border: 1px solid rgba(229,62,62,.2);
@@ -347,12 +396,13 @@ a:hover { color: var(--gold); }
   border: 1px solid rgba(255,255,255,.08);
   border-radius: var(--radius-lg);
   padding: 24px;
-  transition: border-color .25s, transform .25s, background .25s;
+  transition: border-color .3s, transform .3s cubic-bezier(0.34,1.3,0.64,1), background .3s, box-shadow .3s;
 }
 .card:hover {
   background: rgba(255,255,255,.06);
-  border-color: rgba(212,168,67,.2);
-  transform: translateY(-3px);
+  border-color: rgba(212,168,67,.22);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0,0,0,.35), 0 0 0 1px rgba(212,168,67,.08);
 }
 
 .card-elevated {
@@ -454,10 +504,10 @@ tr:hover td      { background: rgba(212,168,67,.03); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px; height: 40px;
+  width: 100%; height: auto; aspect-ratio: 1;
   border-radius: 50%;
   font-weight: 600;
-  font-size: 14px;
+  font-size: clamp(10px, 1.3vw, 14px);
   cursor: pointer;
   transition: all .15s;
   user-select: none;
@@ -467,7 +517,7 @@ tr:hover td      { background: rgba(212,168,67,.03); }
 /* ─── Grade de números ───────────────────────────────────────────── */
 .number-grid {
   display: grid;
-  grid-template-columns: repeat(10, 1fr);
+  grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: 9px;
 }
 
@@ -498,12 +548,14 @@ tr:hover td      { background: rgba(212,168,67,.03); }
 }
 
 .number-ball-selected {
-  background: var(--forest2);
+  background: radial-gradient(circle at 35% 30%, #2fc47a 0%, var(--forest2) 70%);
   border-color: var(--forest3);
   color: #fff;
-  transform: scale(1.08);
-  box-shadow: 0 0 16px rgba(38,168,106,.4);
-  animation: ballPop .2s ease, glowPulse 2s ease infinite;
+  transform: scale(1.1);
+  box-shadow: 0 0 18px rgba(38,168,106,.5),
+              inset 0 -3px 6px rgba(0,0,0,.3),
+              inset 0 2px 4px rgba(255,255,255,.15);
+  animation: numberPop .25s cubic-bezier(0.34,1.56,0.64,1), glowPulse 2s ease infinite;
 }
 
 .number-ball-hit {
@@ -522,14 +574,23 @@ tr:hover td      { background: rgba(212,168,67,.03); }
   justify-content: center;
   width: 52px; height: 52px;
   border-radius: 50%;
-  background: var(--forest);
+  background: radial-gradient(circle at 35% 30%, #1e6b3f 0%, #0a2e1c 70%);
   border: 2px solid var(--gold);
   color: #fff;
   font-family: 'Cormorant Garamond', serif;
   font-size: 22px;
   font-weight: 700;
-  box-shadow: 0 4px 16px rgba(212,168,67,.2);
+  box-shadow: 0 6px 20px rgba(212,168,67,.25),
+              inset 0 -4px 8px rgba(0,0,0,.4),
+              inset 0 3px 6px rgba(255,255,255,.12);
   animation: bounceIn .4s ease;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.drawn-ball:hover {
+  transform: scale(1.1);
+  box-shadow: 0 8px 28px rgba(212,168,67,.4),
+              inset 0 -4px 8px rgba(0,0,0,.4),
+              inset 0 3px 6px rgba(255,255,255,.15);
 }
 
 /* ─── Loading ────────────────────────────────────────────────────── */
@@ -552,10 +613,12 @@ tr:hover td      { background: rgba(212,168,67,.03); }
   position: relative;
   border-radius: var(--radius-xl);
   overflow: hidden;
-  background: linear-gradient(135deg, #0a2218 0%, #1a4a2e 50%, #0f2e1e 100%);
+  background: linear-gradient(135deg, #071a10 0%, #0a2218 25%, #1a4a2e 60%, #0f2e1e 100%);
+  background-size: 200% 200%;
   border: 1px solid rgba(212,168,67,.25);
   margin: 2.5rem 0 2rem;
   padding: 3.5rem 2.5rem;
+  animation: heroGradientAnim 14s ease infinite;
 }
 .hero-deco {
   position: absolute;
@@ -876,4 +939,159 @@ tr:hover td      { background: rgba(212,168,67,.03); }
   .prize-val     { font-size: 28px; }
   .cd-val        { font-size: 22px; }
   .cd-box        { min-width: 46px; padding: 8px 10px; }
+}
+
+/* ─── Scroll Reveal ──────────────────────────────────────────────── */
+.reveal-hidden {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity .55s ease, transform .55s ease;
+}
+.reveal-hidden.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+.stagger-1 { transition-delay: .05s; }
+.stagger-2 { transition-delay: .12s; }
+.stagger-3 { transition-delay: .19s; }
+.stagger-4 { transition-delay: .26s; }
+.stagger-5 { transition-delay: .33s; }
+.stagger-6 { transition-delay: .40s; }
+
+/* ─── Page entrance ──────────────────────────────────────────────── */
+.page-enter {
+  animation: revealUp .42s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+/* ─── Dropdown animado ───────────────────────────────────────────── */
+.dropdown-slide {
+  animation: slideDown .18s cubic-bezier(0.22,1,0.36,1) forwards;
+  transform-origin: top right;
+}
+
+/* ─── Cart item ──────────────────────────────────────────────────── */
+.cart-item {
+  animation: cartIn .22s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+/* ─── Skeleton loading ───────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,.05) 0%,
+    rgba(255,255,255,.12) 50%,
+    rgba(255,255,255,.05) 100%
+  );
+  background-size: 400px 100%;
+  animation: skeletonShimmer 1.6s ease infinite;
+  border-radius: var(--radius-sm);
+  color: transparent !important;
+  pointer-events: none;
+}
+
+/* ─── Topbar com scroll ──────────────────────────────────────────── */
+.topbar.scrolled {
+  background: rgba(7,11,17,.98);
+  box-shadow: 0 4px 32px rgba(0,0,0,.6);
+  border-bottom-color: rgba(212,168,67,.15);
+}
+
+/* ─── Step card icon ─────────────────────────────────────────────── */
+.step-icon {
+  width: 56px; height: 56px;
+  border-radius: 16px;
+  background: rgba(212,168,67,.08);
+  border: 1px solid rgba(212,168,67,.2);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 16px;
+  color: var(--gold2);
+  transition: background .3s, transform .3s cubic-bezier(0.34,1.3,0.64,1);
+}
+.card:hover .step-icon {
+  background: rgba(212,168,67,.14);
+  transform: scale(1.08) rotate(-3deg);
+}
+
+/* ─── Prize card icon ────────────────────────────────────────────── */
+.prize-icon-wrap {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 12px;
+  transition: transform .3s cubic-bezier(0.34,1.3,0.64,1);
+}
+.prize-card:hover .prize-icon-wrap { transform: scale(1.15) rotate(5deg); }
+
+.prize-icon-gold     { background: rgba(212,168,67,.12); color: var(--gold2); }
+.prize-icon-orange   { background: rgba(245,158,11,.1);  color: #fbbf24; }
+.prize-icon-blue     { background: rgba(96,165,250,.1);  color: #93c5fd; }
+
+/* ─── CD box flip ────────────────────────────────────────────────── */
+.cd-val {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px;
+  color: var(--gold2);
+  line-height: 1;
+  transition: transform .15s ease;
+}
+
+/* ─── Topbar nav indicator ───────────────────────────────────────── */
+.nav-tab {
+  position: relative;
+}
+.nav-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 16px; right: 16px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  border-radius: 2px;
+}
+
+/* ─── Bottom nav active glow ─────────────────────────────────────── */
+.bottom-nav-item.active .bottom-nav-icon {
+  filter: drop-shadow(0 0 6px rgba(212,168,67,.6));
+}
+
+/* ─── Btn primary shimmer ────────────────────────────────────────── */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+}
+.btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
+  transform: skewX(-20deg);
+  animation: btnShimmer 3s ease infinite;
+}
+@keyframes btnShimmer {
+  0%, 60% { left: -100%; }
+  100%     { left: 200%; }
+}
+
+/* ─── Card gold glow on hover ────────────────────────────────────── */
+.card-gold {
+  transition: box-shadow .3s, transform .3s;
+}
+.card-gold:hover {
+  box-shadow: 0 0 40px rgba(212,168,67,.25);
+  transform: translateY(-2px);
+}
+
+/* ─── Rodapé legal ───────────────────────────────────────────────── */
+.legal-footer {
+  text-align: center;
+  padding: 10px 20px;
+  font-size: 0.6rem;
+  color: rgba(250,247,240,0.2);
+  line-height: 1.6;
+  border-top: 1px solid rgba(212,168,67,0.07);
+  margin-top: auto;
+}
+@media (max-width: 768px) {
+  .legal-footer { padding-bottom: 80px; }
 }

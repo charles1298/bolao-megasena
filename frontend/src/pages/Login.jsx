@@ -65,7 +65,7 @@ export default function Login() {
             Bem-vindo!
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            Acesse sua conta do Bolão Mega Sena
+            Acesse sua conta da GoPremiada
           </p>
         </div>
 
