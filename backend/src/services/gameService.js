@@ -21,20 +21,20 @@ async function getLatestGame() {
 }
 
 /**
- * Verifica se números são válidos para Mega Sena.
- * - Exatamente 6 números
+ * Verifica se um conjunto de números é válido.
+ * - Exatamente `required` números (cartela = 8; sorteio oficial da Mega = 6)
  * - Todos entre 1 e 60
  * - Sem repetições
  */
-function validateNumbers(numbers) {
-  if (!Array.isArray(numbers) || numbers.length !== 6) {
-    return { valid: false, error: 'Selecione exatamente 6 números.' };
+function validateNumbers(numbers, required = 8) {
+  if (!Array.isArray(numbers) || numbers.length !== required) {
+    return { valid: false, error: `Selecione exatamente ${required} números.` };
   }
   const nums = numbers.map(Number);
   if (nums.some((n) => !Number.isInteger(n) || n < 1 || n > 60)) {
     return { valid: false, error: 'Números devem ser inteiros entre 1 e 60.' };
   }
-  if (new Set(nums).size !== 6) {
+  if (new Set(nums).size !== required) {
     return { valid: false, error: 'Números não podem se repetir.' };
   }
   return { valid: true, numbers: nums.sort((a, b) => a - b) };
@@ -47,10 +47,10 @@ function validateNumbers(numbers) {
  * Regra de acumulação:
  * - Os números sorteados de cada draw se acumulam no jogo
  * - Uma cartela acumula acertos de todos os draws anteriores
- * - Quando uma cartela tiver 6 acertos acumulados = ganhador
+ * - Quando uma cartela acertar TODOS os seus 8 números = ganhador
  *
  * @param {string} gameId
- * @param {number[]} drawnNumbers - 6 números deste sorteio
+ * @param {number[]} drawnNumbers - 6 números deste sorteio (oficial da Mega)
  * @param {Date} drawDate
  * @returns {{ winners: Ticket[], peQuente: Ticket[], peFrio: Ticket[] }}
  */
@@ -105,7 +105,7 @@ async function processDraw(gameId, drawnNumbers, drawDate) {
       totalAccumulated: hitsInAccumulated,
     });
 
-    const isWinner = hitsInAccumulated >= 6;
+    const isWinner = hitsInAccumulated >= 8;
     updatedTickets.push({
       id: ticket.id,
       totalHits: hitsInAccumulated,
@@ -117,12 +117,9 @@ async function processDraw(gameId, drawnNumbers, drawDate) {
     if (isWinner) winners.push(ticket);
   }
 
-  // Identifica "pé quente" (5 acertos) e "pé frio" (0 acertos neste draw)
-  const peQuente = updatedTickets.filter((t) => t.totalHits === 5 && !winners.includes(t.ticket));
-  const peFrio = updatedTickets.filter((t) => {
-    const lastHit = t.hitHistory[t.hitHistory.length - 1];
-    return lastHit?.hitsThisDraw === 0;
-  });
+  // Modelo atual: prêmio único pro ganhador (acertou os 8). Sem pé quente/pé frio.
+  const peQuente = [];
+  const peFrio = [];
 
   // Atualiza todas as cartelas no banco em transação
   await prisma.$transaction(async (tx) => {
@@ -136,22 +133,15 @@ async function processDraw(gameId, drawnNumbers, drawDate) {
       },
     });
 
-    // Marca cartelas pé quente / pé frio
     for (const t of updatedTickets) {
-      const isThisPeQuente = t.totalHits === 5 && !winners.includes(t.ticket);
-      const isThisPeFrio = (() => {
-        const lastHit = t.hitHistory[t.hitHistory.length - 1];
-        return lastHit?.hitsThisDraw === 0;
-      })();
-
       await tx.ticket.update({
         where: { id: t.id },
         data: {
           totalHits: t.totalHits,
           hitHistory: t.hitHistory,
           status: t.status,
-          isPeQuente: isThisPeQuente,
-          isPeFrio: isThisPeFrio,
+          isPeQuente: false,
+          isPeFrio: false,
         },
       });
     }
@@ -160,8 +150,8 @@ async function processDraw(gameId, drawnNumbers, drawDate) {
   return {
     draw,
     winners: updatedTickets.filter((t) => t.status === 'winner').map((t) => t.ticket),
-    peQuente: peQuente.map((t) => t.ticket),
-    peFrio: peFrio.map((t) => t.ticket),
+    peQuente,
+    peFrio,
   };
 }
 

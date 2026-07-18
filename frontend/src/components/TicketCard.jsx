@@ -1,11 +1,23 @@
 import React from 'react';
 
+function formatDate(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+    timeZone: 'America/Sao_Paulo',
+  });
+}
+
 const STATUS_MAP = {
   pending_payment: { label: 'Aguardando pagamento', cls: 'badge-warning' },
-  active:          { label: 'Ativa',                cls: 'badge-success'  },
+  active:          { label: '✅ Paga',              cls: 'badge-success'  },
   winner:          { label: '🏆 Ganhadora!',        cls: 'badge-gold'     },
 };
 
+// Remoção de cartela é exclusiva do admin (via /admin/tickets/:id no painel).
+// Usuários comuns não têm controle sobre cancelamento — para evitar fraudes,
+// disputas pós-sorteio e divergências contábeis com pagamentos já aprovados.
 export default function TicketCard({ ticket }) {
   const status   = STATUS_MAP[ticket.status] ?? { label: ticket.status, cls: 'badge-muted' };
   const hitNums  = getHitNumbers(ticket);
@@ -22,10 +34,22 @@ export default function TicketCard({ ticket }) {
       }}
     >
       {/* Cabeçalho */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--text-muted)', letterSpacing: 1 }}>
-          #{ticket.id.slice(-8).toUpperCase()}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div>
+          <div style={{ fontSize: '0.63rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>Protocolo</div>
+          <span style={{
+            fontFamily: 'monospace', fontSize: '0.82rem', letterSpacing: 1,
+            color: isWinner ? 'var(--gold2)' : 'var(--text-muted)',
+            fontWeight: isWinner ? 700 : 400,
+          }}>
+            #{ticket.id.slice(-8).toUpperCase()}
+          </span>
+          {ticket.createdAt && (
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 3 }}>
+              Comprado em {formatDate(ticket.createdAt)}
+            </div>
+          )}
+        </div>
         <span className={`badge ${status.cls}`}>{status.label}</span>
       </div>
 
@@ -50,16 +74,9 @@ export default function TicketCard({ ticket }) {
         <div style={{ marginRight: 'auto' }}>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Acertos acumulados</div>
           <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--gold2)', fontFamily: "'Cormorant Garamond', serif" }}>
-            {ticket.totalHits}/6
+            {ticket.totalHits}/8
           </div>
         </div>
-
-        {ticket.isPeQuente && (
-          <span className="badge badge-warning" title="5 acertos acumulados">🔥 Pé Quente</span>
-        )}
-        {ticket.isPeFrio && (
-          <span className="badge badge-muted" title="0 acertos no último sorteio">❄️ Pé Frio</span>
-        )}
 
         {ticket.prizeAmount && Number(ticket.prizeAmount) > 0 && (
           <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
@@ -71,8 +88,36 @@ export default function TicketCard({ ticket }) {
         )}
       </div>
 
+      {/* Confirmação de pagamento */}
+      {ticket.status === 'active' && ticket.payment?.paidAt && (
+        <div style={{ fontSize: '0.76rem', color: 'var(--forest3)', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span>✓</span>
+          <span>Pagamento confirmado em {formatDate(ticket.payment.paidAt)}</span>
+        </div>
+      )}
+
+      {/* Mensagem para ganhador */}
+      {isWinner && (
+        <div style={{
+          padding: '12px 14px',
+          background: 'rgba(212,168,67,.1)',
+          border: '1px solid rgba(212,168,67,.3)',
+          borderRadius: 10,
+          fontSize: '0.82rem',
+          color: 'var(--gold2)',
+          textAlign: 'center',
+          lineHeight: 1.6,
+        }}>
+          🎉 <strong>Parabéns!</strong> O administrador entrará em contato pelo WhatsApp para a entrega do prêmio.
+          <br />
+          <span style={{ fontSize: '0.78rem', opacity: 0.8 }}>
+            Protocolo: <strong>#{ticket.id.slice(-8).toUpperCase()}</strong>
+          </span>
+        </div>
+      )}
+
       {/* Aviso de pagamento pendente */}
-      {ticket.payment?.status === 'pending' && (
+      {ticket.status === 'pending_payment' && (
         <div style={{
           padding: '8px 12px',
           background: 'rgba(212,168,67,.08)',
@@ -84,6 +129,7 @@ export default function TicketCard({ ticket }) {
           ⏳ Pagamento pendente — conclua o PIX para ativar.
         </div>
       )}
+
     </div>
   );
 }

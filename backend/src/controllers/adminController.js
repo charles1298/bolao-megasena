@@ -1,5 +1,6 @@
 const { prisma } = require('../services/prismaClient');
 const { generateSecret, verifyToken } = require('../services/totpService');
+const { encryptTotp, decryptTotp } = require('../utils/cryptoHelper');
 const { processDraw, validateNumbers } = require('../services/gameService');
 const { distributePrizes } = require('../services/prizeService');
 const { logAdminAction } = require('../middlewares/admin');
@@ -20,10 +21,10 @@ async function setupTotp(req, res) {
 
     const { secret, qrCodeDataUrl, otpAuthUrl } = await generateSecret(admin.nickname);
 
-    // Salva segredo temporariamente (confirmação pendente)
+    // Salva segredo temporariamente (confirmação pendente) — cifrado se TOTP_ENCRYPTION_KEY configurado
     await prisma.user.update({
       where: { id: admin.id },
-      data: { totpSecret: secret },
+      data: { totpSecret: encryptTotp(secret) },
     });
 
     res.json({ qrCodeDataUrl, otpAuthUrl, secret });
@@ -49,7 +50,8 @@ async function confirmTotp(req, res) {
       return res.status(400).json({ error: '2FA já está ativo.' });
     }
 
-    if (!verifyToken(token, admin.totpSecret)) {
+    const plainSecret = decryptTotp(admin.totpSecret);
+    if (!verifyToken(token, plainSecret)) {
       return res.status(401).json({ error: 'Código 2FA inválido.' });
     }
 
@@ -70,9 +72,34 @@ async function confirmTotp(req, res) {
  * POST /api/admin/games
  * Cria novo jogo.
  */
+// Sincroniza os settings públicos (banner da Home) com as datas do jogo.
+// Mantém a UI sempre consistente sem o admin precisar mexer na aba Configurações.
+async function syncPublicSettings({ startDate, autoCloseAt }) {
+  const ops = [];
+  if (startDate) {
+    const iso = new Date(startDate).toISOString().slice(0, 19);
+    ops.push(prisma.setting.upsert({
+      where: { key: 'data_inicio' },
+      update: { value: iso },
+      create: { key: 'data_inicio', value: iso },
+    }));
+  }
+  if (autoCloseAt) {
+    const iso = new Date(autoCloseAt).toISOString().slice(0, 19);
+    ops.push(prisma.setting.upsert({
+      where: { key: 'data_fechamento' },
+      update: { value: iso },
+      create: { key: 'data_fechamento', value: iso },
+    }));
+  }
+  if (ops.length > 0) {
+    try { await Promise.all(ops); } catch (e) { logger.safeError('Falha ao sincronizar settings públicos', e); }
+  }
+}
+
 async function createGame(req, res) {
   try {
-    const { name, startDate } = req.body;
+    const { name, startDate, autoCloseAt } = req.body;
 
     // Não pode ter jogo ativo simultâneo
     const existingActive = await prisma.game.findFirst({
@@ -87,8 +114,11 @@ async function createGame(req, res) {
         name: name || 'Bolão Mega Sena',
         startDate: new Date(startDate),
         status: new Date(startDate) <= new Date() ? 'active' : 'pending',
+        ...(autoCloseAt ? { autoCloseAt: new Date(autoCloseAt) } : {}),
       },
     });
+
+    await syncPublicSettings({ startDate: game.startDate, autoCloseAt: game.autoCloseAt });
 
     await logAdminAction(req.user.id, 'GAME_CREATED', { gameId: game.id, name: game.name }, req.ip);
     logger.info('Jogo criado', { gameId: game.id, adminId: req.user.id });
@@ -134,7 +164,8 @@ async function registerDraw(req, res) {
     const { id } = req.params;
     const { numbers, drawDate } = req.body;
 
-    const numValidation = validateNumbers(numbers);
+    // Sorteio oficial da Mega Sena = 6 dezenas (a cartela é que tem 8).
+    const numValidation = validateNumbers(numbers, 6);
     if (!numValidation.valid) {
       return res.status(422).json({ error: numValidation.error });
     }
@@ -341,7 +372,7 @@ async function getAdminLogs(req, res) {
  */
 async function getDashboard(req, res) {
   try {
-    const [totalUsers, activeGame, totalRevenue, pendingPayments, recentTickets] =
+    const [totalUsers, activeGame, totalRevenue, pendingPayments, recentTickets, winners] =
       await Promise.all([
         prisma.user.count({ where: { role: 'player' } }),
         prisma.game.findFirst({
@@ -359,6 +390,15 @@ async function getDashboard(req, res) {
           orderBy: { createdAt: 'desc' },
           include: { user: { select: { nickname: true } } },
         }),
+        // Ganhadores aguardando contato (todos os tickets com status='winner')
+        prisma.ticket.findMany({
+          where: { status: 'winner' },
+          orderBy: { updatedAt: 'desc' },
+          include: {
+            user: { select: { nickname: true, whatsapp: true } },
+            game: { select: { id: true, name: true } },
+          },
+        }),
       ]);
 
     res.json({
@@ -370,12 +410,25 @@ async function getDashboard(req, res) {
             status: activeGame.status,
             activeTickets: activeGame._count.tickets,
             drawCount: activeGame.drawCount,
+            bettingLocked: activeGame.bettingLocked,
           }
         : null,
       totalRevenue: Number(totalRevenue._sum.amount || 0).toFixed(2),
       houseCut: (Number(totalRevenue._sum.amount || 0) * 0.20).toFixed(2),
       pendingPayments,
       recentTickets,
+      winners: winners.map((t) => ({
+        id: t.id,
+        protocol: t.id.slice(-8).toUpperCase(),
+        nickname: t.user?.nickname,
+        whatsapp: t.user?.whatsapp || null,
+        numbers: t.numbers,
+        prizeAmount: t.prizeAmount ? Number(t.prizeAmount) : null,
+        prizePaidAt: t.prizePaidAt,
+        prizePaymentNotes: t.prizePaymentNotes,
+        gameName: t.game?.name,
+        wonAt: t.updatedAt,
+      })),
     });
   } catch (err) {
     logger.safeError('Erro ao carregar dashboard', err);
@@ -499,6 +552,50 @@ async function resetUserPassword(req, res) {
  * POST /api/admin/payments/:id/approve
  * Aprova manualmente um pagamento pendente e ativa a cartela.
  */
+/**
+ * POST /api/admin/tickets/:id/prize-paid
+ * Marca um ticket ganhador como tendo recebido o prêmio.
+ * Cria trilha auditável: quem pagou, quando, comentário/comprovante.
+ */
+async function markPrizePaid(req, res) {
+  try {
+    const { id } = req.params;
+    const { notes } = req.body || {};
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      select: { id: true, status: true, userId: true, prizeAmount: true, prizePaidAt: true },
+    });
+    if (!ticket) return res.status(404).json({ error: 'Cartela não encontrada.' });
+    if (ticket.status !== 'winner') {
+      return res.status(400).json({ error: 'Apenas cartelas ganhadoras podem ser marcadas como pagas.' });
+    }
+    if (ticket.prizePaidAt) {
+      return res.status(409).json({ error: 'Prêmio já foi marcado como pago.' });
+    }
+
+    const updated = await prisma.ticket.update({
+      where: { id },
+      data: {
+        prizePaidAt: new Date(),
+        prizePaidByAdminId: req.user.id,
+        prizePaymentNotes: notes ? String(notes).slice(0, 1000) : null,
+      },
+      select: { id: true, prizePaidAt: true, prizePaymentNotes: true },
+    });
+
+    await logAdminAction(req.user.id, 'PRIZE_PAID', {
+      ticketId: id, beneficiaryUserId: ticket.userId,
+      amount: ticket.prizeAmount, notes: notes || null,
+    }, req.ip);
+
+    res.json({ message: 'Prêmio marcado como pago.', ticket: updated });
+  } catch (err) {
+    logger.safeError('Erro ao marcar prêmio como pago', err);
+    res.status(500).json({ error: 'Erro ao marcar prêmio como pago.' });
+  }
+}
+
 async function approvePayment(req, res) {
   try {
     const { id } = req.params;
@@ -513,29 +610,26 @@ async function approvePayment(req, res) {
     if (!payment) return res.status(404).json({ error: 'Pagamento não encontrado.' });
     if (payment.status === 'approved') return res.status(400).json({ error: 'Pagamento já aprovado.' });
 
-    const updates = [
-      prisma.payment.update({
-        where: { id },
+    // Aprovação idempotente: só incrementa o pot se este update realmente
+    // mudou o status (proteção contra cliques/requisições concorrentes).
+    await prisma.$transaction(async (tx) => {
+      const upd = await tx.payment.updateMany({
+        where: { id, status: { not: 'approved' } },
         data: { status: 'approved', paidAt: new Date() },
-      }),
-    ];
+      });
+      if (upd.count === 0) return;
 
-    if (payment.ticket.status === 'pending_payment') {
-      updates.push(
-        prisma.ticket.update({
+      if (payment.ticket.status === 'pending_payment') {
+        await tx.ticket.update({
           where: { id: payment.ticket.id },
           data: { status: 'active' },
-        })
-      );
-      updates.push(
-        prisma.game.update({
+        });
+        await tx.game.update({
           where: { id: payment.ticket.gameId },
           data: { totalPot: { increment: Number(payment.amount) } },
-        })
-      );
-    }
-
-    await prisma.$transaction(updates);
+        });
+      }
+    });
 
     await logAdminAction(req.user.id, 'PAYMENT_APPROVED_MANUAL', {
       paymentId: id,
@@ -552,15 +646,244 @@ async function approvePayment(req, res) {
   }
 }
 
+/**
+ * DELETE /api/admin/games/:id
+ * Remove um jogo ativo/pendente (bloqueia se houver pagamentos aprovados).
+ */
+async function deleteGame(req, res) {
+  try {
+    const { id } = req.params;
+
+    const game = await prisma.game.findUnique({
+      where: { id },
+      include: { _count: { select: { tickets: true } } },
+    });
+    if (!game) return res.status(404).json({ error: 'Jogo não encontrado.' });
+    if (game.status === 'finished') {
+      return res.status(400).json({ error: 'Não é possível excluir um jogo já finalizado.' });
+    }
+
+    const approvedPayments = await prisma.payment.count({
+      where: { ticket: { gameId: id }, status: 'approved' },
+    });
+    if (approvedPayments > 0) {
+      return res.status(409).json({
+        error: `Este jogo possui ${approvedPayments} pagamento(s) aprovado(s). Cancele as cartelas pagas antes de excluir o jogo.`,
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.payment.deleteMany({ where: { ticket: { gameId: id } } }),
+      prisma.draw.deleteMany({ where: { gameId: id } }),
+      prisma.ticket.deleteMany({ where: { gameId: id } }),
+      prisma.game.delete({ where: { id } }),
+    ]);
+
+    await logAdminAction(req.user.id, 'GAME_DELETED', { gameId: id, name: game.name }, req.ip);
+    logger.info('Jogo excluído pelo admin', { gameId: id, adminId: req.user.id });
+
+    res.json({ message: `Jogo "${game.name}" excluído com sucesso.` });
+  } catch (err) {
+    logger.safeError('Erro ao excluir jogo', err);
+    res.status(500).json({ error: 'Erro ao excluir jogo.' });
+  }
+}
+
+/**
+ * GET /api/admin/tickets
+ * Lista cartelas do jogo ativo com paginação.
+ */
+async function listTickets(req, res) {
+  try {
+    const page  = Math.max(1, parseInt(req.query.page  || '1'));
+    const limit = Math.min(100, parseInt(req.query.limit || '20'));
+    const skip  = (page - 1) * limit;
+    const { gameId, status } = req.query;
+
+    const where = {};
+    if (gameId) where.gameId = gameId;
+    if (status) where.status = status;
+
+    const [tickets, total] = await Promise.all([
+      prisma.ticket.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          user:    { select: { nickname: true, whatsapp: true } },
+          payment: { select: { id: true, status: true, amount: true, paidAt: true } },
+          game:    { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.ticket.count({ where }),
+    ]);
+
+    res.json({ tickets, total, page, pages: Math.ceil(total / limit) });
+  } catch (err) {
+    logger.safeError('Erro ao listar cartelas (admin)', err);
+    res.status(500).json({ error: 'Erro ao listar cartelas.' });
+  }
+}
+
+/**
+ * DELETE /api/admin/tickets/:id
+ * Remove uma cartela e cancela o pagamento associado.
+ * Bloqueia se a cartela for ganhadora.
+ */
+async function deleteTicket(req, res) {
+  try {
+    const { id } = req.params;
+
+    const ticket = await prisma.ticket.findUnique({
+      where: { id },
+      include: {
+        payment: { select: { id: true, status: true } },
+        user: { select: { nickname: true } },
+      },
+    });
+    if (!ticket) return res.status(404).json({ error: 'Cartela não encontrada.' });
+    if (ticket.status === 'winner') {
+      return res.status(400).json({ error: 'Não é possível excluir uma cartela ganhadora.' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (ticket.payment) {
+        await tx.payment.update({
+          where: { id: ticket.payment.id },
+          data: { status: 'cancelled' },
+        });
+      }
+      await tx.ticket.delete({ where: { id } });
+    });
+
+    await logAdminAction(req.user.id, 'TICKET_DELETED', {
+      ticketId: id,
+      userId:   ticket.userId,
+      nickname: ticket.user?.nickname,
+      numbers:  ticket.numbers,
+      wasApproved: ticket.payment?.status === 'approved',
+    }, req.ip);
+
+    res.json({ message: 'Cartela removida com sucesso.' });
+  } catch (err) {
+    logger.safeError('Erro ao excluir cartela', err);
+    res.status(500).json({ error: 'Erro ao excluir cartela.' });
+  }
+}
+
+/**
+ * PATCH /api/admin/games/:id/betting-lock
+ * Liga/desliga o travamento manual de apostas.
+ */
+async function toggleBettingLock(req, res) {
+  try {
+    const { id } = req.params;
+    const game = await prisma.game.findUnique({ where: { id } });
+    if (!game) return res.status(404).json({ error: 'Jogo não encontrado.' });
+
+    const updated = await prisma.game.update({
+      where: { id },
+      data: { bettingLocked: !game.bettingLocked },
+    });
+
+    await logAdminAction(req.user.id, updated.bettingLocked ? 'BETTING_LOCKED' : 'BETTING_UNLOCKED', { gameId: id }, req.ip);
+
+    res.json({ bettingLocked: updated.bettingLocked });
+  } catch (err) {
+    logger.safeError('Erro ao alternar travamento de apostas', err);
+    res.status(500).json({ error: 'Erro ao alterar apostas.' });
+  }
+}
+
+/**
+ * PATCH /api/admin/games/:id/auto-close
+ * Define (ou remove) o horário de corte automático de apostas.
+ * Body: { autoCloseAt: "2024-06-15T17:00:00-03:00" } | { autoCloseAt: null }
+ */
+async function setAutoClose(req, res) {
+  try {
+    const { id } = req.params;
+    const { autoCloseAt } = req.body;
+
+    const game = await prisma.game.findUnique({ where: { id } });
+    if (!game) return res.status(404).json({ error: 'Jogo não encontrado.' });
+
+    const updated = await prisma.game.update({
+      where: { id },
+      data: { autoCloseAt: autoCloseAt ? new Date(autoCloseAt) : null },
+    });
+
+    if (updated.autoCloseAt) {
+      await syncPublicSettings({ autoCloseAt: updated.autoCloseAt });
+    }
+
+    await logAdminAction(req.user.id, 'AUTO_CLOSE_SET', { gameId: id, autoCloseAt }, req.ip);
+    res.json({ autoCloseAt: updated.autoCloseAt });
+  } catch (err) {
+    logger.safeError('Erro ao definir fechamento automático', err);
+    res.status(500).json({ error: 'Erro ao definir fechamento automático.' });
+  }
+}
+
+// ─── Configurações (datas do bolão) ──────────────────────────────────
+async function getSettings(req, res) {
+  try {
+    const rows = await prisma.setting.findMany({
+      where: { key: { in: ['data_inicio', 'data_fechamento'] } },
+    });
+    const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    res.json({
+      dataInicio:     map['data_inicio']     ?? null,
+      dataFechamento: map['data_fechamento'] ?? null,
+    });
+  } catch (err) {
+    logger.safeError('Erro ao buscar configurações', err);
+    res.status(500).json({ error: 'Erro ao buscar configurações.' });
+  }
+}
+
+async function updateSettings(req, res) {
+  try {
+    const { dataInicio, dataFechamento } = req.body;
+    const updates = [];
+
+    if (dataInicio) {
+      updates.push(prisma.setting.upsert({
+        where: { key: 'data_inicio' },
+        update: { value: dataInicio },
+        create: { key: 'data_inicio', value: dataInicio },
+      }));
+    }
+    if (dataFechamento) {
+      updates.push(prisma.setting.upsert({
+        where: { key: 'data_fechamento' },
+        update: { value: dataFechamento },
+        create: { key: 'data_fechamento', value: dataFechamento },
+      }));
+    }
+
+    await Promise.all(updates);
+    await logAdminAction(req.user.id, 'SETTINGS_UPDATED', { dataInicio, dataFechamento }, req.ip);
+    res.json({ message: 'Configurações salvas com sucesso.' });
+  } catch (err) {
+    logger.safeError('Erro ao salvar configurações', err);
+    res.status(500).json({ error: 'Erro ao salvar configurações.' });
+  }
+}
+
 module.exports = {
   setupTotp,
   confirmTotp,
   createGame,
   activateGame,
+  deleteGame,
   registerDraw,
   processPrizes,
   listUsers,
   listTransactions,
+  listTickets,
+  deleteTicket,
   exportTicketsCSV,
   exportTransactionsCSV,
   getAdminLogs,
@@ -568,5 +891,10 @@ module.exports = {
   fetchOfficialResult,
   syncOfficialResult,
   approvePayment,
+  markPrizePaid,
   resetUserPassword,
+  toggleBettingLock,
+  setAutoClose,
+  getSettings,
+  updateSettings,
 };

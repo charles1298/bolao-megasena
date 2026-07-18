@@ -2,17 +2,18 @@ const { prisma } = require('./prismaClient');
 const logger = require('../utils/logger');
 
 /**
- * Distribuição de prêmios conforme as regras:
- * - 6 acertos: 65% do total
- * - Pé quente (5 acertos): 10% dividido entre todos com 5 acertos
- * - Pé frio (0 acertos no último draw): 5% dividido entre todos com 0 acertos
- * - Casa: 20%
+ * Divisão do valor arrecadado quando sai o ganhador:
+ * - Ganhador (acertou os 8): 79% do total
+ * - Casa (organizadores): 20% do total (10% + 10%)
+ * - Taxa do gateway (Mercado Pago): 1% do total
+ *
+ * O pagamento ao ganhador é feito manualmente por PIX (auditado nos campos
+ * prize_paid_* da cartela). Aqui apenas calculamos e registramos os valores.
  */
 const PRIZE_RULES = {
-  SIX_HITS: 0.65,
-  PE_QUENTE: 0.10,
-  PE_FRIO: 0.05,
+  WINNER: 0.79,
   HOUSE: 0.20,
+  GATEWAY: 0.01,
 };
 
 /**
@@ -27,7 +28,7 @@ async function distributePrizes(gameId) {
     where: { id: gameId },
     include: {
       tickets: {
-        where: { status: { in: ['winner', 'active'] } },
+        where: { status: 'winner' },
         include: { user: true },
       },
     },
@@ -40,29 +41,20 @@ async function distributePrizes(gameId) {
   const totalPot = await calculateTotalPot(gameId);
   if (totalPot <= 0) throw new Error('Não há valor arrecadado para distribuir.');
 
-  const winners = game.tickets.filter((t) => t.status === 'winner');
-  const peQuenteTickets = game.tickets.filter((t) => t.isPeQuente);
-  const peFrioTickets = game.tickets.filter((t) => t.isPeFrio);
-
+  const winners = game.tickets;
   if (winners.length === 0) throw new Error('Nenhum ganhador encontrado.');
 
   const prizePool = Number(totalPot);
 
-  // Calcula valores
-  const sixHitsPrize = prizePool * PRIZE_RULES.SIX_HITS;
-  const peQuentePrize = prizePool * PRIZE_RULES.PE_QUENTE;
-  const peFrioPrize = prizePool * PRIZE_RULES.PE_FRIO;
-  const housePrize = prizePool * PRIZE_RULES.HOUSE;
+  // Valores da divisão
+  const winnerPrize  = prizePool * PRIZE_RULES.WINNER;
+  const houseAmount  = prizePool * PRIZE_RULES.HOUSE;
+  const gatewayAmount = prizePool * PRIZE_RULES.GATEWAY;
 
-  // Divide prêmio igualmente entre ganhadores
-  const perWinner = winners.length > 0 ? sixHitsPrize / winners.length : 0;
-  const perPeQuente = peQuenteTickets.length > 0 ? peQuentePrize / peQuenteTickets.length : 0;
-  const perPeFrio = peFrioTickets.length > 0 ? peFrioPrize / peFrioTickets.length : 0;
+  // Divide o prêmio igualmente entre ganhadores (normalmente 1)
+  const perWinner = winnerPrize / winners.length;
 
   const updates = [];
-
-  // Acumula prêmio por userId para atualizar balance depois
-  const userPrizeMap = {};
 
   for (const ticket of winners) {
     updates.push(
@@ -71,42 +63,9 @@ async function distributePrizes(gameId) {
         data: { prizeAmount: perWinner.toFixed(2) },
       })
     );
-    userPrizeMap[ticket.userId] = (userPrizeMap[ticket.userId] || 0) + perWinner;
   }
 
-  for (const ticket of peQuenteTickets) {
-    const current = Number(ticket.prizeAmount || 0);
-    updates.push(
-      prisma.ticket.update({
-        where: { id: ticket.id },
-        data: { prizeAmount: (current + perPeQuente).toFixed(2) },
-      })
-    );
-    userPrizeMap[ticket.userId] = (userPrizeMap[ticket.userId] || 0) + perPeQuente;
-  }
-
-  for (const ticket of peFrioTickets) {
-    const current = Number(ticket.prizeAmount || 0);
-    updates.push(
-      prisma.ticket.update({
-        where: { id: ticket.id },
-        data: { prizeAmount: (current + perPeFrio).toFixed(2) },
-      })
-    );
-    userPrizeMap[ticket.userId] = (userPrizeMap[ticket.userId] || 0) + perPeFrio;
-  }
-
-  // Atualiza saldo de cada usuário premiado
-  for (const [userId, amount] of Object.entries(userPrizeMap)) {
-    updates.push(
-      prisma.user.update({
-        where: { id: userId },
-        data: { balance: { increment: parseFloat(amount.toFixed(2)) } },
-      })
-    );
-  }
-
-  // Marca prêmios como distribuídos e atualiza pot do jogo
+  // Marca prêmios como distribuídos e fixa o pot do jogo
   updates.push(
     prisma.game.update({
       where: { id: gameId },
@@ -124,37 +83,27 @@ async function distributePrizes(gameId) {
     totalPot: prizePool.toFixed(2),
     winners: winners.length,
     perWinner: perWinner.toFixed(2),
-    peQuente: peQuenteTickets.length,
-    perPeQuente: perPeQuente.toFixed(2),
-    peFrio: peFrioTickets.length,
-    perPeFrio: perPeFrio.toFixed(2),
-    housePrize: housePrize.toFixed(2),
+    house: houseAmount.toFixed(2),
+    gateway: gatewayAmount.toFixed(2),
   });
 
   return {
     totalPot: prizePool.toFixed(2),
     distribution: {
-      sixHits: {
-        percentage: `${(PRIZE_RULES.SIX_HITS * 100).toFixed(0)}%`,
-        totalAmount: sixHitsPrize.toFixed(2),
+      winner: {
+        percentage: `${(PRIZE_RULES.WINNER * 100).toFixed(0)}%`,
+        totalAmount: winnerPrize.toFixed(2),
         winners: winners.length,
         perWinner: perWinner.toFixed(2),
       },
-      peQuente: {
-        percentage: `${(PRIZE_RULES.PE_QUENTE * 100).toFixed(0)}%`,
-        totalAmount: peQuentePrize.toFixed(2),
-        count: peQuenteTickets.length,
-        perTicket: perPeQuente.toFixed(2),
-      },
-      peFrio: {
-        percentage: `${(PRIZE_RULES.PE_FRIO * 100).toFixed(0)}%`,
-        totalAmount: peFrioPrize.toFixed(2),
-        count: peFrioTickets.length,
-        perTicket: perPeFrio.toFixed(2),
-      },
       house: {
         percentage: `${(PRIZE_RULES.HOUSE * 100).toFixed(0)}%`,
-        amount: housePrize.toFixed(2),
+        amount: houseAmount.toFixed(2),
+        perOrganizer: (houseAmount / 2).toFixed(2),
+      },
+      gateway: {
+        percentage: `${(PRIZE_RULES.GATEWAY * 100).toFixed(0)}%`,
+        amount: gatewayAmount.toFixed(2),
       },
     },
   };

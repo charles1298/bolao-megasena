@@ -7,6 +7,7 @@ const {
   getTicketById,
   getRanking,
   getLatestMegaSena,
+  getPublicSettings,
 } = require('../controllers/gameController');
 const { authenticate } = require('../middlewares/auth');
 const { validate } = require('../middlewares/validate');
@@ -14,6 +15,9 @@ const { publicLimiter } = require('../middlewares/rateLimiter');
 
 // GET /api/game/current — público
 router.get('/current', publicLimiter, getCurrentGame);
+
+// GET /api/game/settings — público (datas do bolão)
+router.get('/settings', publicLimiter, getPublicSettings);
 
 // GET /api/game/ranking — público
 router.get('/ranking', publicLimiter, getRanking);
@@ -30,8 +34,8 @@ router.post(
       .isArray({ min: 1, max: 50 })
       .withMessage('Envie entre 1 e 50 cartelas.'),
     body('numbers.*')
-      .isArray({ min: 6, max: 6 })
-      .withMessage('Cada cartela deve ter exatamente 6 números.')
+      .isArray({ min: 8, max: 8 })
+      .withMessage('Cada cartela deve ter exatamente 8 números.')
       .custom((arr) => arr.every((n) => Number.isInteger(Number(n)) && n >= 1 && n <= 60))
       .withMessage('Cada número deve ser inteiro entre 1 e 60.'),
   ],
@@ -50,5 +54,8 @@ router.get(
   validate,
   getTicketById
 );
+
+// Nota: a rota DELETE /api/game/tickets/:id foi removida.
+// Cancelamento de cartelas agora é restrito ao admin via DELETE /api/admin/tickets/:id.
 
 module.exports = router;

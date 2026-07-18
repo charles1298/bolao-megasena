@@ -1,11 +1,12 @@
 import React from 'react';
 
 const TOTAL    = 60;
-const REQUIRED = 6;
+const REQUIRED = 8;
 
 export default function NumberPicker({ selected, onChange, disabled = false, hitNumbers = [] }) {
   function toggle(num) {
     if (disabled) return;
+    if (hitNumbers.includes(num)) return; // números já sorteados são travados
     if (selected.includes(num)) {
       onChange(selected.filter((n) => n !== num));
     } else if (selected.length < REQUIRED) {
@@ -32,7 +33,7 @@ export default function NumberPicker({ selected, onChange, disabled = false, hit
           <span style={{ fontSize: 12, color: 'rgba(250,247,240,.35)' }}>
             <span style={{ color: done ? 'var(--forest3)' : 'var(--gold2)', fontWeight: 700 }}>
               {selected.length}
-            </span>/6
+            </span>/8
           </span>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -88,8 +89,8 @@ export default function NumberPicker({ selected, onChange, disabled = false, hit
             type="button"
             className={ballClass(num)}
             onClick={() => toggle(num)}
-            disabled={disabled || (selected.length >= REQUIRED && !selected.includes(num))}
-            title={`Número ${String(num).padStart(2, '0')}`}
+            disabled={disabled || hitNumbers.includes(num) || (selected.length >= REQUIRED && !selected.includes(num))}
+            title={hitNumbers.includes(num) ? 'Número já sorteado — bloqueado' : `Número ${String(num).padStart(2, '0')}`}
           >
             {String(num).padStart(2, '0')}
           </button>
