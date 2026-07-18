@@ -16,6 +16,17 @@ volumes:
 
 services:
 
+  # ─── Redis (rate-limit persistido + blacklist de tokens) ─────────
+  redis:
+    image: redis:7-alpine
+    container_name: bolao_redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --save ""
+    networks:
+      - backend_net
+    expose:
+      - "6379"
+
   # ─── Banco de Dados ──────────────────────────────────────────────
   db:
     image: postgres:16-alpine
@@ -57,6 +68,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       NODE_ENV: production
       PORT: 3001
@@ -74,6 +87,8 @@ services:
       ADMIN_WHATSAPP: ${ADMIN_WHATSAPP}
       ADMIN_TOTP_ISSUER: BolaoMegaSena
       ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY}
+      REDIS_URL: redis://redis:6379
       LOG_LEVEL: info
       LOG_DIR: /app/logs
     volumes:
@@ -101,9 +116,11 @@ services:
     networks:
       - frontend_net
       - backend_net
+    # Bind apenas em localhost: o nginx do host faz proxy_pass para 127.0.0.1:3000.
+    # Assim a porta 3000 NUNCA fica exposta diretamente à internet, mesmo que o
+    # firewall (ufw) falhe ou seja desabilitado por engano. Defense-in-depth.
     ports:
-      - "80:80"
-      # Em produção com SSL, use 443 via reverse proxy (Traefik/Nginx externo)
+      - "127.0.0.1:3000:80"
 
 # ─── Compose override para desenvolvimento ─────────────────────────
 # Use: docker compose -f docker-compose.yml -f docker-compose.dev.yml up

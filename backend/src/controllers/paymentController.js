@@ -1,5 +1,6 @@
 const { prisma } = require('../services/prismaClient');
 const { validateWebhookSignature, getPaymentStatus } = require('../services/mercadoPagoService');
+const { processPaymentUpdate } = require('../services/paymentService');
 const logger = require('../utils/logger');
 
 /**
@@ -15,7 +16,15 @@ async function handleWebhook(req, res) {
       return res.status(401).json({ error: 'Assinatura inválida.' });
     }
 
-    const { type, data } = req.body;
+    // express.raw() entrega o body como Buffer — precisa parsear para JSON
+    let body;
+    try {
+      body = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString('utf8')) : req.body;
+    } catch {
+      return res.status(400).json({ error: 'Body inválido.' });
+    }
+
+    const { type, data } = body;
 
     // MP envia type=payment para notificações de pagamento
     if (type !== 'payment') {
@@ -69,7 +78,7 @@ async function checkPaymentStatus(req, res) {
         id: paymentId,
         ticket: { userId: req.user.id },
       },
-      include: { ticket: { select: { id: true, status: true } } },
+      include: { ticket: { select: { id: true, gameId: true, userId: true, status: true } } },
     });
 
     if (!payment) {
@@ -102,54 +111,6 @@ async function checkPaymentStatus(req, res) {
     logger.safeError('Erro ao checar pagamento', err);
     res.status(500).json({ error: 'Erro ao verificar pagamento.' });
   }
-}
-
-/**
- * Processa a atualização de status de um pagamento.
- * Ativa cartelas quando pagamento é aprovado.
- */
-async function processPaymentUpdate(payment, mpStatus) {
-  if (payment.status === mpStatus.status) return; // Sem mudança
-
-  const updates = [
-    prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        status: mpStatus.status,
-        paidAt: mpStatus.status === 'approved' ? (mpStatus.paidAt || new Date()) : null,
-      },
-    }),
-  ];
-
-  // Quando aprovado, ativa a cartela
-  if (mpStatus.status === 'approved' && payment.ticket.status === 'pending_payment') {
-    updates.push(
-      prisma.ticket.update({
-        where: { id: payment.ticket.id },
-        data: { status: 'active' },
-      })
-    );
-
-    // Atualiza o pot do jogo
-    updates.push(
-      prisma.game.update({
-        where: { id: payment.ticket.gameId },
-        data: {
-          totalPot: {
-            increment: Number(payment.amount),
-          },
-        },
-      })
-    );
-
-    logger.info('Pagamento aprovado — cartela ativada', {
-      paymentId: payment.id,
-      ticketId: payment.ticket.id,
-      mpPaymentId: payment.mpPaymentId,
-    });
-  }
-
-  await prisma.$transaction(updates);
 }
 
 module.exports = { handleWebhook, checkPaymentStatus };

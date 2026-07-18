@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { prisma } = require('../services/prismaClient');
+const redisClient = require('../services/redisClient');
 const logger = require('../utils/logger');
 
 /**
@@ -22,6 +23,15 @@ async function authenticate(req, res, next) {
         return res.status(401).json({ error: 'Token expirado.', code: 'TOKEN_EXPIRED' });
       }
       return res.status(401).json({ error: 'Token inválido.' });
+    }
+
+    // Verifica blacklist de tokens revogados (logout explícito)
+    // Fail-open: se Redis estiver indisponível, permite a requisição
+    if (redisClient.isReady) {
+      const revoked = await redisClient.get(`revoked:${token}`).catch(() => null);
+      if (revoked) {
+        return res.status(401).json({ error: 'Sessão encerrada. Faça login novamente.', code: 'TOKEN_REVOKED' });
+      }
     }
 
     // Verifica se o usuário ainda existe e está ativo

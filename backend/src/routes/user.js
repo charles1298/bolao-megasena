@@ -1,9 +1,9 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
-const { getProfile, updateProfile, getMyStats, changePassword } = require('../controllers/userController');
+const { getProfile, updateProfile, getMyStats, changePassword, deleteMyAccount } = require('../controllers/userController');
 const { authenticate } = require('../middlewares/auth');
 const { validate, sanitizeBody } = require('../middlewares/validate');
-const { passwordChangeLimiter } = require('../middlewares/rateLimiter');
+const { passwordChangeLimiter, adminSensitiveLimiter } = require('../middlewares/rateLimiter');
 
 router.use(authenticate);
 
@@ -38,6 +38,16 @@ router.put(
   ],
   validate,
   changePassword
+);
+
+// DELETE /api/users/me — anonimização LGPD (exclusão da conta)
+router.delete(
+  '/me',
+  adminSensitiveLimiter,
+  sanitizeBody,
+  [body('password').notEmpty().withMessage('Senha obrigatória para confirmar exclusão.')],
+  validate,
+  deleteMyAccount
 );
 
 module.exports = router;

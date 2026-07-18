@@ -19,11 +19,24 @@ router.post(
       .withMessage('Apelido pode conter letras, números, espaço, _ e -.'),
     body('password')
       .isLength({ min: 8, max: 128 })
-      .withMessage('Senha deve ter entre 8 e 128 caracteres.'),
+      .withMessage('Senha deve ter entre 8 e 128 caracteres.')
+      .matches(/[A-Z]/)
+      .withMessage('Senha deve conter ao menos uma letra maiúscula.')
+      .matches(/\d/)
+      .withMessage('Senha deve conter ao menos um número.'),
     body('whatsapp')
-      .optional()
+      .notEmpty()
+      .withMessage('WhatsApp é obrigatório para contato sobre pagamentos.')
+      .bail()
       .matches(/^(55\d{10,11}|\d{10,11})$/)
       .withMessage('WhatsApp inválido. Use DDD + número (ex: 5511999999999).'),
+    body('cpf')
+      .notEmpty()
+      .withMessage('CPF é obrigatório para verificação de idade e emissão de comprovante de prêmio.')
+      .bail()
+      .customSanitizer((v) => String(v || '').replace(/\D/g, ''))
+      .isLength({ min: 11, max: 11 })
+      .withMessage('CPF deve ter 11 dígitos.'),
   ],
   validate,
   register

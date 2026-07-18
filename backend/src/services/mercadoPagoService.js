@@ -35,7 +35,7 @@ async function createPixPayment({ ticketId, payerNickname, amount, idempotencyKe
     description: `Bolão Mega Sena — Cartela ${ticketId.slice(-8).toUpperCase()}`,
     payment_method_id: 'pix',
     payer: {
-      email: `${payerNickname.toLowerCase().replace(/[^a-z0-9]/g, '')}@bolao.temp`,
+      email: `${payerNickname.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jogador'}@bolao.com.br`,
       first_name: payerNickname,
     },
     notification_url: `${process.env.BACKEND_URL || 'https://api.seudominio.com.br'}/api/payments/webhook`,
@@ -67,6 +67,7 @@ async function createPixPayment({ ticketId, payerNickname, amount, idempotencyKe
 /**
  * Busca o status atual de um pagamento no MP.
  * Usado como fallback caso o webhook não chegue.
+ * Retorna também o valor efetivamente transacionado para conferência anti-fraude.
  */
 async function getPaymentStatus(mpPaymentId) {
   const client = getClient();
@@ -74,6 +75,7 @@ async function getPaymentStatus(mpPaymentId) {
   return {
     status: response.status,
     statusDetail: response.status_detail,
+    amount: response.transaction_amount != null ? Number(response.transaction_amount) : null,
     paidAt: response.date_approved ? new Date(response.date_approved) : null,
   };
 }
@@ -116,13 +118,30 @@ function validateWebhookSignature(req) {
   }
 
   const dataId = req.query['data.id'] || req.body?.data?.id;
+  if (!dataId) {
+    logger.warn('Webhook MP rejeitado: dataId ausente no manifest');
+    return false;
+  }
+
+  // v1 deve ser hash SHA-256 em hex (64 chars). Rejeita formato inválido ANTES
+  // do timingSafeEqual — buffers de tamanhos diferentes fariam o compare lançar
+  // exceção (que viraria 200 no handler, mascarando a rejeição).
+  if (typeof v1 !== 'string' || !/^[a-f0-9]{64}$/i.test(v1)) {
+    logger.warn('Webhook MP rejeitado: formato de assinatura inválido');
+    return false;
+  }
+
   const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
   const expectedHash = crypto
     .createHmac('sha256', secret)
     .update(manifest)
     .digest('hex');
 
-  return crypto.timingSafeEqual(Buffer.from(v1, 'hex'), Buffer.from(expectedHash, 'hex'));
+  const v1Buf = Buffer.from(v1, 'hex');
+  const expectedBuf = Buffer.from(expectedHash, 'hex');
+  if (v1Buf.length !== expectedBuf.length) return false;
+
+  return crypto.timingSafeEqual(v1Buf, expectedBuf);
 }
 
 module.exports = { createPixPayment, getPaymentStatus, validateWebhookSignature };

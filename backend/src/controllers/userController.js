@@ -28,19 +28,38 @@ async function getProfile(req, res) {
 
 /**
  * PATCH /api/users/me
- * Atualiza whatsapp do usuário.
+ * Atualiza whatsapp do usuário. Bloqueia duplicatas com mensagem clara.
  */
 async function updateProfile(req, res) {
   try {
     const { whatsapp } = req.body;
+    const newWhats = whatsapp ? String(whatsapp).replace(/\D/g, '') : null;
 
-    const updated = await prisma.user.update({
-      where: { id: req.user.id },
-      data: { whatsapp: whatsapp || null },
-      select: { id: true, nickname: true, whatsapp: true },
-    });
+    // Checagem prévia: se outro usuário já tem esse WhatsApp, rejeita com mensagem amigável
+    if (newWhats) {
+      const conflict = await prisma.user.findFirst({
+        where: { whatsapp: newWhats, NOT: { id: req.user.id } },
+        select: { id: true },
+      });
+      if (conflict) {
+        return res.status(409).json({ error: 'Este WhatsApp já está cadastrado em outra conta.' });
+      }
+    }
 
-    res.json(updated);
+    try {
+      const updated = await prisma.user.update({
+        where: { id: req.user.id },
+        data: { whatsapp: newWhats },
+        select: { id: true, nickname: true, whatsapp: true },
+      });
+      return res.json(updated);
+    } catch (updateErr) {
+      // Race condition: outro request criou conflito entre a checagem e o update
+      if (updateErr.code === 'P2002') {
+        return res.status(409).json({ error: 'Este WhatsApp já está cadastrado em outra conta.' });
+      }
+      throw updateErr;
+    }
   } catch (err) {
     logger.safeError('Erro ao atualizar perfil', err);
     res.status(500).json({ error: 'Erro ao atualizar perfil.' });
@@ -53,19 +72,13 @@ async function updateProfile(req, res) {
  */
 async function getMyStats(req, res) {
   try {
-    const [tickets, user] = await Promise.all([
-      prisma.ticket.findMany({
-        where: { userId: req.user.id },
-        include: {
-          payment: { select: { status: true } },
-          game: { select: { name: true, status: true } },
-        },
-      }),
-      prisma.user.findUnique({
-        where: { id: req.user.id },
-        select: { balance: true },
-      }),
-    ]);
+    const tickets = await prisma.ticket.findMany({
+      where: { userId: req.user.id },
+      include: {
+        payment: { select: { status: true } },
+        game: { select: { name: true, status: true } },
+      },
+    });
 
     const activeTickets = tickets.filter((t) => t.status === 'active');
     const winners = tickets.filter((t) => t.status === 'winner');
@@ -92,7 +105,6 @@ async function getMyStats(req, res) {
       totalPrize: totalPrize.toFixed(2),
       bestHits,
       totalHits,
-      balance: Number(user?.balance || 0).toFixed(2),
     });
   } catch (err) {
     logger.safeError('Erro ao buscar estatísticas', err);
@@ -130,4 +142,61 @@ async function changePassword(req, res) {
   }
 }
 
-module.exports = { getProfile, updateProfile, getMyStats, changePassword };
+/**
+ * DELETE /api/users/me
+ * Exclui a conta do usuário autenticado (anonimização LGPD).
+ * Mantém os registros de cartelas/pagamentos por exigência fiscal/auditoria,
+ * mas remove qualquer dado pessoal (apelido, WhatsApp, senha).
+ * Após esta operação o usuário não consegue mais fazer login.
+ */
+async function deleteMyAccount(req, res) {
+  const bcrypt = require('bcrypt');
+  const crypto = require('crypto');
+  try {
+    const { password } = req.body;
+    if (!password) return res.status(400).json({ error: 'Confirme sua senha para excluir a conta.' });
+
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+
+    // Admin não pode se autoexcluir — evita ficar sem admin
+    if (user.role === 'admin') {
+      return res.status(403).json({ error: 'Conta administrativa não pode ser excluída por aqui.' });
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) return res.status(401).json({ error: 'Senha incorreta.' });
+
+    // Anonimiza: apelido vira marcador único, senha vira hash aleatório (impossível logar),
+    // WhatsApp e 2FA removidos, conta desativada. Cartelas/pagamentos ficam preservados
+    // referenciando o ID original (auditoria contábil).
+    const anonNickname = `deleted_${user.id.slice(0, 8)}`;
+    const randomPassword = crypto.randomBytes(48).toString('hex');
+    const rounds = parseInt(process.env.BCRYPT_ROUNDS || '12');
+    const sealedHash = await bcrypt.hash(randomPassword, rounds);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: {
+          nickname:    anonNickname,
+          passwordHash: sealedHash,
+          whatsapp:    null,
+          totpSecret:  null,
+          totpEnabled: false,
+          isActive:    false,
+        },
+      }),
+      // Revoga todas as sessões existentes
+      prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+    ]);
+
+    logger.info('Conta anonimizada por solicitação do usuário (LGPD)', { userId: user.id });
+    res.json({ message: 'Conta excluída com sucesso.' });
+  } catch (err) {
+    logger.safeError('Erro ao excluir conta', err);
+    res.status(500).json({ error: 'Erro ao excluir conta.' });
+  }
+}
+
+module.exports = { getProfile, updateProfile, getMyStats, changePassword, deleteMyAccount };

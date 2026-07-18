@@ -2,6 +2,9 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { prisma } = require('../services/prismaClient');
+const { decryptTotp } = require('../utils/cryptoHelper');
+const { cleanCpf, isValidCpf } = require('../utils/cpfHelper');
+const redisClient = require('../services/redisClient');
 const logger = require('../utils/logger');
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
@@ -48,7 +51,10 @@ function generateAccessToken(user) {
   return jwt.sign(
     { sub: user.id, nickname: user.nickname, role: user.role },
     JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    // Access token curto: o frontend renova de forma transparente via refresh token
+    // (interceptor em api.js trata TOKEN_EXPIRED). Reduz a janela de uso de um
+    // token vazado, já que a blacklist de logout é fail-open se o Redis cair.
+    { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
   );
 }
 
@@ -62,25 +68,57 @@ function generateRefreshToken(user) {
 
 async function register(req, res) {
   try {
-    const { nickname, password, whatsapp } = req.body;
+    const { nickname, password, whatsapp, cpf: rawCpf } = req.body;
 
-    // Verifica duplicata
+    // CPF: limpa formatação e valida checksum oficial (mod 11)
+    const cpf = cleanCpf(rawCpf);
+    if (!cpf || !isValidCpf(cpf)) {
+      return res.status(422).json({ error: 'CPF inválido.' });
+    }
+
+    // Verifica duplicatas (nickname, whatsapp e cpf são únicos)
     const existing = await prisma.user.findUnique({ where: { nickname } });
     if (existing) {
       return res.status(409).json({ error: 'Apelido já em uso.' });
     }
 
+    if (whatsapp) {
+      const existingWhatsapp = await prisma.user.findUnique({ where: { whatsapp } });
+      if (existingWhatsapp) {
+        return res.status(409).json({ error: 'Este WhatsApp já está cadastrado em outra conta.' });
+      }
+    }
+
+    const existingCpf = await prisma.user.findUnique({ where: { cpf } });
+    if (existingCpf) {
+      return res.status(409).json({ error: 'Este CPF já está cadastrado.' });
+    }
+
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-    const user = await prisma.user.create({
-      data: {
-        nickname,
-        passwordHash,
-        whatsapp: whatsapp || null,
-        role: 'player',
-      },
-      select: { id: true, nickname: true, role: true, createdAt: true },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          nickname,
+          passwordHash,
+          whatsapp: whatsapp || null,
+          cpf,
+          role: 'player',
+        },
+        select: { id: true, nickname: true, role: true, createdAt: true },
+      });
+    } catch (createErr) {
+      // Caso raro: race condition entre a checagem acima e o create
+      if (createErr.code === 'P2002') {
+        const target = createErr.meta?.target || [];
+        if (target.includes('cpf'))      return res.status(409).json({ error: 'Este CPF já está cadastrado.' });
+        if (target.includes('whatsapp')) return res.status(409).json({ error: 'Este WhatsApp já está cadastrado em outra conta.' });
+        if (target.includes('nickname')) return res.status(409).json({ error: 'Apelido já em uso.' });
+        return res.status(409).json({ error: 'Conta duplicada.' });
+      }
+      throw createErr;
+    }
 
     logger.info('Usuário registrado', { userId: user.id, nickname: user.nickname });
 
@@ -150,7 +188,8 @@ async function login(req, res) {
       }
 
       const { verifyToken } = require('../services/totpService');
-      if (!verifyToken(totpToken, user.totpSecret)) {
+      const plainSecret = decryptTotp(user.totpSecret);
+      if (!verifyToken(totpToken, plainSecret)) {
         await prisma.loginAttempt.create({
           data: { ipAddress: ip, nickname, success: false },
         });
@@ -182,10 +221,6 @@ async function login(req, res) {
       user: { id: user.id, nickname: user.nickname, role: user.role },
       accessToken,
       refreshToken,
-      // Avisa admin sem 2FA configurado (não bloqueia, mas incentiva)
-      ...(user.role === 'admin' && !user.totpEnabled
-        ? { securityWarning: 'Ative o 2FA no painel admin para aumentar a segurança da conta.' }
-        : {}),
     });
   } catch (err) {
     logger.safeError('Erro no login', err);
@@ -239,6 +274,23 @@ async function refresh(req, res) {
 
 async function logout(req, res) {
   try {
+    // Coloca o access token atual na blacklist do Redis até ele expirar naturalmente
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ') && redisClient.isReady) {
+      const token = authHeader.slice(7);
+      try {
+        const payload = jwt.decode(token);
+        if (payload?.exp) {
+          const ttl = payload.exp - Math.floor(Date.now() / 1000);
+          if (ttl > 0) {
+            await redisClient.set(`revoked:${token}`, '1', { EX: ttl });
+          }
+        }
+      } catch {
+        // Não crítico — token provavelmente já expirou
+      }
+    }
+
     const { refreshToken } = req.body;
     if (refreshToken) {
       await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });

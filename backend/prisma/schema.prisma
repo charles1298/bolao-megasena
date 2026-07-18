@@ -35,12 +35,12 @@ model User {
   id           String   @id @default(uuid())
   nickname     String   @unique
   passwordHash String   @map("password_hash")
-  whatsapp     String?
+  whatsapp     String?  @unique
+  cpf          String?  @unique @db.VarChar(11)
   role         UserRole @default(player)
   totpSecret   String?  @map("totp_secret")
   totpEnabled  Boolean  @default(false) @map("totp_enabled")
   isActive     Boolean  @default(true) @map("is_active")
-  balance      Decimal  @default(0) @map("balance") @db.Decimal(12, 2)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -71,6 +71,8 @@ model Game {
   totalPot           Decimal    @default(0) @map("total_pot") @db.Decimal(12, 2)
   accumulatedNumbers Int[]      @map("accumulated_numbers")
   drawCount          Int        @default(0) @map("draw_count")
+  bettingLocked      Boolean    @default(false) @map("betting_locked")
+  autoCloseAt        DateTime?  @map("auto_close_at")
   prizeProcessed     Boolean    @default(false) @map("prize_processed")
   createdAt          DateTime   @default(now()) @map("created_at")
   updatedAt          DateTime   @updatedAt @map("updated_at")
@@ -95,23 +97,28 @@ model Draw {
 }
 
 model Ticket {
-  id             String       @id @default(uuid())
-  userId         String       @map("user_id")
-  gameId         String       @map("game_id")
-  numbers        Int[]
-  status         TicketStatus @default(pending_payment)
-  totalHits      Int          @default(0) @map("total_hits")
-  hitHistory     Json         @default("[]") @map("hit_history")
-  prizeAmount    Decimal?     @map("prize_amount") @db.Decimal(12, 2)
-  isPeQuente     Boolean      @default(false) @map("is_pe_quente")
-  isPeFrio       Boolean      @default(false) @map("is_pe_frio")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+  id                 String       @id @default(uuid())
+  userId             String       @map("user_id")
+  gameId             String       @map("game_id")
+  numbers            Int[]
+  status             TicketStatus @default(pending_payment)
+  totalHits          Int          @default(0) @map("total_hits")
+  hitHistory         Json         @default("[]") @map("hit_history")
+  prizeAmount        Decimal?     @map("prize_amount") @db.Decimal(12, 2)
+  prizePaidAt        DateTime?    @map("prize_paid_at")
+  prizePaidByAdminId String?      @map("prize_paid_by_admin_id")
+  prizePaymentNotes  String?      @map("prize_payment_notes") @db.Text
+  isPeQuente         Boolean      @default(false) @map("is_pe_quente")
+  isPeFrio           Boolean      @default(false) @map("is_pe_frio")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
 
   user    User     @relation(fields: [userId], references: [id])
   game    Game     @relation(fields: [gameId], references: [id])
   payment Payment?
 
+  @@index([gameId, status])
+  @@index([userId, createdAt(sort: Desc)])
   @@map("tickets")
 }
 
@@ -132,6 +139,7 @@ model Payment {
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
+  @@index([status, createdAt])
   @@map("payments")
 }
 
@@ -145,7 +153,16 @@ model AdminLog {
 
   admin User @relation(fields: [adminId], references: [id])
 
+  @@index([adminId, createdAt(sort: Desc)])
   @@map("admin_logs")
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
 }
 
 model LoginAttempt {

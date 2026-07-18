@@ -7,7 +7,7 @@ RUN apk add --no-cache openssl libc6-compat
 # Instala todas as dependências
 FROM base AS deps
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Gera o Prisma Client
 FROM deps AS builder

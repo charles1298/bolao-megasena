@@ -5,10 +5,13 @@ const {
   confirmTotp,
   createGame,
   activateGame,
+  deleteGame,
   registerDraw,
   processPrizes,
   listUsers,
   listTransactions,
+  listTickets,
+  deleteTicket,
   exportTicketsCSV,
   exportTransactionsCSV,
   getAdminLogs,
@@ -16,7 +19,12 @@ const {
   fetchOfficialResult,
   syncOfficialResult,
   approvePayment,
+  markPrizePaid,
   resetUserPassword,
+  toggleBettingLock,
+  setAutoClose,
+  getSettings,
+  updateSettings,
 } = require('../controllers/adminController');
 const { authenticate } = require('../middlewares/auth');
 const { requireAdmin } = require('../middlewares/admin');
@@ -45,6 +53,7 @@ router.post(
   [
     body('name').optional().trim().isLength({ max: 100 }),
     body('startDate').isISO8601().withMessage('Data de início inválida.'),
+    body('autoCloseAt').optional({ nullable: true }).isISO8601().withMessage('Horário de corte inválido.'),
   ],
   validate,
   createGame
@@ -55,6 +64,32 @@ router.patch(
   [param('id').isUUID()],
   validate,
   activateGame
+);
+
+router.delete(
+  '/games/:id',
+  adminSensitiveLimiter,
+  [param('id').isUUID()],
+  validate,
+  deleteGame
+);
+
+router.patch(
+  '/games/:id/betting-lock',
+  [param('id').isUUID()],
+  validate,
+  toggleBettingLock
+);
+
+router.patch(
+  '/games/:id/auto-close',
+  sanitizeBody,
+  [
+    param('id').isUUID(),
+    body('autoCloseAt').optional({ nullable: true }).isISO8601().withMessage('Horário de corte inválido.'),
+  ],
+  validate,
+  setAutoClose
 );
 
 // ─── Sorteios ─────────────────────────────────────────────────
@@ -98,6 +133,27 @@ router.get(
   listUsers
 );
 
+// ─── Cartelas ─────────────────────────────────────────────────
+router.get(
+  '/tickets',
+  [
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 100 }),
+    query('gameId').optional().isUUID(),
+    query('status').optional().isIn(['active', 'pending_payment', 'winner', 'cancelled']),
+  ],
+  validate,
+  listTickets
+);
+
+router.delete(
+  '/tickets/:id',
+  adminSensitiveLimiter,
+  [param('id').isUUID()],
+  validate,
+  deleteTicket
+);
+
 // ─── Transações ───────────────────────────────────────────────
 router.get(
   '/transactions',
@@ -134,6 +190,18 @@ router.post(
   approvePayment
 );
 
+// ─── Marcar prêmio como pago (auditoria) ──────────────────────
+router.post(
+  '/tickets/:id/prize-paid',
+  sanitizeBody,
+  [
+    param('id').isUUID(),
+    body('notes').optional().isString().isLength({ max: 1000 }),
+  ],
+  validate,
+  markPrizePaid
+);
+
 // ─── Exportações CSV ──────────────────────────────────────────
 router.get(
   '/reports/tickets.csv',
@@ -158,5 +226,18 @@ router.get(
 // ─── Resultado Oficial Mega Sena ──────────────────────────────
 router.get('/mega-sena/latest', fetchOfficialResult);
 router.post('/mega-sena/sync', adminSensitiveLimiter, syncOfficialResult);
+
+// ─── Configurações do bolão (datas) ───────────────────────────
+router.get('/settings', getSettings);
+router.patch(
+  '/settings',
+  sanitizeBody,
+  [
+    body('dataInicio').optional().isISO8601().withMessage('Data de início inválida.'),
+    body('dataFechamento').optional().isISO8601().withMessage('Data de fechamento inválida.'),
+  ],
+  validate,
+  updateSettings
+);
 
 module.exports = router;
