@@ -48,8 +48,15 @@ const userRoutes = require('./src/routes/user');
 
 const app = express();
 
-// ─── Confia no primeiro proxy (necessário para req.ip correto atrás de Nginx) ──
-app.set('trust proxy', 1);
+// ─── Cadeia de proxy: Cloudflare(futuro) → nginx host → nginx container → backend
+// Há 2 proxies que ANEXAM X-Forwarded-For entre o cliente e o Express (nginx do
+// host + nginx do container). Com 'trust proxy' = 2, req.ip resolve o IP REAL do
+// cliente e um XFF injetado pelo atacante cai ALÉM da profundidade confiável (não
+// spoofável). Com valor 1 (antigo), req.ip virava o gateway Docker fixo
+// (172.16.x.1) e TODO o rate-limiting por IP compartilhava um único balde global.
+// Se entrar Cloudflare, configurar real_ip (CF-Connecting-IP) no nginx do host
+// mantém esta contagem = 2.
+app.set('trust proxy', 2);
 
 // ─── Segurança: HTTP Headers ──────────────────────────────────────────────────
 app.use(
