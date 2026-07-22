@@ -51,19 +51,19 @@ async function processPaymentUpdate(payment, mpStatus) {
 
   // ─── APROVAÇÃO ──────────────────────────────────────────────────────────
   if (newStatus === 'approved') {
-    // Conferência de valor: rejeita aprovação se o pago divergir do esperado
-    if (mpStatus.amount != null) {
-      const expected = Number(payment.amount);
-      const paid = Number(mpStatus.amount);
-      if (Math.abs(paid - expected) > AMOUNT_EPSILON) {
-        logger.error('Pagamento com valor divergente — aprovação RECUSADA', {
-          paymentId: payment.id,
-          mpPaymentId: payment.mpPaymentId,
-          expected: expected.toFixed(2),
-          paid: paid.toFixed(2),
-        });
-        return; // não aprova nem ativa a cartela
-      }
+    // Conferência de valor: só aprova se o MP confirmar o valor E ele bater com
+    // o esperado. Se o valor vier ausente/nulo, NÃO aprova (não dá pra conferir
+    // anti-fraude às cegas) — o polling reprocessa quando o MP retornar o valor.
+    const expected = Number(payment.amount);
+    const paid = mpStatus.amount != null ? Number(mpStatus.amount) : null;
+    if (paid == null || Math.abs(paid - expected) > AMOUNT_EPSILON) {
+      logger.error('Pagamento sem valor confirmável ou divergente — aprovação RECUSADA', {
+        paymentId: payment.id,
+        mpPaymentId: payment.mpPaymentId,
+        expected: expected.toFixed(2),
+        paid: paid == null ? 'null' : paid.toFixed(2),
+      });
+      return; // não aprova nem ativa a cartela
     }
 
     await prisma.$transaction(async (tx) => {

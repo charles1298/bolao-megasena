@@ -17,6 +17,22 @@ async function requireAdmin(req, res, next) {
       return res.status(403).json({ error: 'Acesso restrito a administradores.' });
     }
 
+    // 2FA obrigatório no painel admin. Exceção: os próprios endpoints de setup/
+    // confirmação do TOTP — senão seria impossível ativar o 2FA na primeira vez.
+    const isTotpSetupRoute = req.path.includes('/totp');
+    if (!isTotpSetupRoute) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { totpEnabled: true },
+      });
+      if (!dbUser?.totpEnabled) {
+        return res.status(403).json({
+          error: 'Autenticação em dois fatores (2FA) é obrigatória para o painel administrativo.',
+          code: 'TOTP_SETUP_REQUIRED',
+        });
+      }
+    }
+
     next();
   } catch (err) {
     next(err);
